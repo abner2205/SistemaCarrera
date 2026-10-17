@@ -1,0 +1,99 @@
+<UserControl x:Class="CarreraApp.UI.Views.HitsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F4F6F9" FontFamily="Segoe UI">
+    <Grid Margin="20">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="350"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Columna Izquierda: Formularios -->
+        <StackPanel Grid.Column="0" Margin="0,0,20,0">
+            
+            <!-- Formulario Crear Hit -->
+            <Border Background="White" CornerRadius="8" Padding="20" Margin="0,0,0,20">
+                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Nuevo Hit de Salida" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+                    <TextBlock Text="Nombre del Hit (Ej: Hit 1):" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                    <TextBox Name="InputNombreHit" Padding="8" FontSize="16" Margin="0,0,0,15"/>
+                    <Button Name="BtnAccionHit" Content="GUARDAR HIT" Click="BtnGuardarHit_Click" Background="#0078D7" Foreground="White" FontWeight="Bold" Padding="10" BorderThickness="0" Cursor="Hand"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Formulario Crear Categoría -->
+            <Border Background="White" CornerRadius="8" Padding="20">
+                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="Nueva Categoría" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+                    <TextBlock Text="Nombre (Ej: Libre Masculino):" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                    <TextBox Name="InputNombreCategoria" Padding="8" FontSize="16" Margin="0,0,0,15"/>
+                    <Button Name="BtnAccionCategoria" Content="GUARDAR CATEGORÍA" Click="BtnGuardarCategoria_Click" Background="#17A2B8" Foreground="White" FontWeight="Bold" Padding="10" BorderThickness="0" Cursor="Hand"/>
+                </StackPanel>
+            </Border>
+            
+        </StackPanel>
+
+        <!-- Columna Derecha: Listas de Registros -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="20"/> <!-- Espaciador -->
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Lista de Hits -->
+            <Border Grid.Row="0" Background="White" CornerRadius="8" Padding="20">
+                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Hits Registrados" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+                    <DataGrid Name="TablaHits" AutoGenerateColumns="False" IsReadOnly="True" Background="Transparent" RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ID" Binding="{Binding ID_Hit}" Width="40"/>
+                            <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre_Hit}" Width="*"/>
+                            <DataGridTextColumn Header="Hora Inicio" Binding="{Binding Hora_Inicio, StringFormat={}{0:HH:mm:ss}}" Width="100"/>
+                            <DataGridTextColumn Header="Hora Fin" Binding="{Binding Hora_Fin, StringFormat={}{0:HH:mm:ss}}" Width="100"/>
+                            <!-- Nueva columna de Acciones -->
+                            <DataGridTemplateColumn Header="Acciones" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Button Content="Ed" Click="BtnEditarHit_Click" Background="#FFC107" FontWeight="Bold" BorderThickness="0" Margin="0,0,5,0" Padding="5,2" Cursor="Hand"/>
+                                            <Button Content="X" Click="BtnEliminarHit_Click" Background="#DC3545" Foreground="White" FontWeight="Bold" BorderThickness="0" Padding="5,2" Cursor="Hand"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+
+            <!-- Lista de Categorías -->
+            <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="20">
+                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Categorías Registradas" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+                    <DataGrid Name="TablaCategorias" AutoGenerateColumns="False" IsReadOnly="True" Background="Transparent" RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="ID" Binding="{Binding ID_Categoria}" Width="40"/>
+                            <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*"/>
+                            <!-- Nueva columna de Acciones -->
+                            <DataGridTemplateColumn Header="Acciones" Width="80">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <Button Content="Ed" Click="BtnEditarCategoria_Click" Background="#FFC107" FontWeight="Bold" BorderThickness="0" Margin="0,0,5,0" Padding="5,2" Cursor="Hand"/>
+                                            <Button Content="X" Click="BtnEliminarCategoria_Click" Background="#DC3545" Foreground="White" FontWeight="Bold" BorderThickness="0" Padding="5,2" Cursor="Hand"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

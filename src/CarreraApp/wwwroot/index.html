@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juez de Meta - Cronometraje</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f9; padding: 10px; margin: 0; }
+        h2 { text-align: center; color: #333; }
+        #camera-container { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+        #camera-feed { width: 100%; max-width: 400px; border-radius: 8px; background: #000; }
+        .btn { padding: 15px; width: 100%; max-width: 400px; font-size: 18px; margin-top: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn:active { background: #0056b3; }
+        
+        #pending-queue { max-width: 400px; margin: 0 auto; }
+        .pending-item { display: flex; align-items: center; background: #fff; padding: 10px; margin-top: 10px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .pending-item img { width: 80px; height: 80px; object-fit: cover; border-radius: 5px; margin-right: 15px; }
+        .pending-item input { flex-grow: 1; padding: 10px; font-size: 16px; margin-right: 10px; width: 60px; border: 1px solid #ccc; border-radius: 4px; }
+        .pending-item button { padding: 10px; background: #28a745; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <h2>Llegada de Corredores</h2>
+    
+    <div id="camera-container">
+        <!-- Visor de la cámara -->
+        <video id="camera-feed" autoplay playsinline></video>
+        <button id="btn-capture" class="btn">CAPTURAR FOTO</button>
+    </div>
+    
+    <!-- Canvas oculto para procesar la imagen -->
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <div id="pending-queue">
+        <!-- Aquí aparecerán las fotos tomadas -->
+    </div>
+
+    <!-- Referencia al archivo JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>

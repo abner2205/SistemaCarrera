@@ -1,0 +1,187 @@
+<UserControl x:Class="CarreraApp.UI.Views.TimingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F4F6F9" FontFamily="Segoe UI">
+
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <!-- Columna Izquierda: Hits -->
+            <ColumnDefinition Width="290"/>
+            <!-- Columna Central: Bandeja y Visor de Fotos -->
+            <ColumnDefinition Width="*"/>
+            <!-- Columna Derecha: Monitoreo y Acciones Rápidas -->
+            <ColumnDefinition Width="300"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- PANEL IZQUIERDO: GESTIÓN DE HITS -->
+        <Border Grid.Column="0" Background="White" CornerRadius="8" Padding="15" Margin="0,0,10,0">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="5" Color="#D3D3D3" ShadowDepth="1" Opacity="0.5"/>
+            </Border.Effect>
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Control de Salidas (Hits)" FontSize="20" FontWeight="Bold" Foreground="#333" Margin="0,0,0,15"/>
+                
+                <ListView Name="ListaHits" BorderThickness="0" 
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
+                          ScrollViewer.VerticalScrollBarVisibility="Auto"
+                          Padding="0,0,8,0">
+                    <ListView.ItemContainerStyle>
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0,0,0,10"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <ContentPresenter />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.ItemContainerStyle>
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#FAFAFA" BorderBrush="{Binding BordeColor}" BorderThickness="2" CornerRadius="8" Padding="12" Margin="0,0,2,0">
+                                <StackPanel>
+                                    <!-- Encabezado del Hit con Badge de Estado -->
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="{Binding Nombre_Hit}" FontSize="15" FontWeight="Bold" Foreground="#222" DockPanel.Dock="Left" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                                        <Border Background="{Binding ColorBadge}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                                            <TextBlock Text="{Binding EstadoTexto}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                    </DockPanel>
+
+                                    <!-- Cronómetro Digital -->
+                                    <TextBlock Text="{Binding CronometroTexto}" FontSize="24" FontWeight="Bold" FontFamily="Consolas" HorizontalAlignment="Center" Foreground="{Binding ColorCronometro}" Margin="0,8,0,4"/>
+
+                                    <!-- Datos de Inicio y Llegadas -->
+                                    <TextBlock Text="{Binding InfoInicio}" Foreground="#666" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                                    <TextBlock Text="{Binding InfoCorredores}" Foreground="#333" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+
+                                    <!-- Botón de Iniciar Hit -->
+                                    <Button Content="{Binding TextoBoton}" Click="BtnIniciarHit_Click" Tag="{Binding ID_Hit}" 
+                                            IsEnabled="{Binding PuedeIniciar}" 
+                                            Background="{Binding ColorBoton}" Foreground="White" FontWeight="Bold" Padding="8" BorderThickness="0" Cursor="Hand"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </DockPanel>
+        </Border>
+
+        <!-- PANEL CENTRAL: BANDEJA DE FOTOS -->
+        <Border Grid.Column="1" Background="White" CornerRadius="8" Padding="15" Margin="5,0,5,0">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="5" Color="#D3D3D3" ShadowDepth="1" Opacity="0.5"/>
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Visor de Llegadas" FontSize="20" FontWeight="Bold" Foreground="#333" Margin="0,0,0,10"/>
+
+                <!-- Controles de Pizarra, Categoría y Logos para TV -->
+                <Border Grid.Row="1" Background="#F8F9FA" BorderBrush="#DEE2E6" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Fila 1: Selector de Categoría y Botones de Pizarra -->
+                        <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                <TextBlock Text="Categoría TV:" FontSize="13" FontWeight="Bold" Foreground="#333" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <ComboBox Name="ComboCategoriasPizarra" Width="170" FontSize="12" Padding="4,3" VerticalAlignment="Center" 
+                                          DisplayMemberPath="Nombre" SelectedValuePath="ID_Categoria" SelectionChanged="ComboCategoriasPizarra_SelectionChanged"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                <Button Name="BtnPizarra" Content="🖥️ ABRIR PIZARRA" Click="BtnPizarra_Click" 
+                                        Background="#6C757D" Foreground="White" FontWeight="Bold" FontSize="11" Padding="10,6" BorderThickness="0" Margin="0,0,6,0" Cursor="Hand"/>
+                                <Button Name="BtnPantallaCompleta" Content="⛶ PANTALLA COMPLETA" Click="BtnPantallaCompleta_Click" 
+                                        Background="#17A2B8" Foreground="White" FontWeight="Bold" FontSize="11" Padding="10,6" BorderThickness="0" Cursor="Hand"/>
+                            </StackPanel>
+                        </DockPanel>
+
+                        <!-- Fila 2: Gestión y reemplazo de Logos para la Pizarra -->
+                        <DockPanel Grid.Row="1" LastChildFill="False">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                                <TextBlock Text="Logos Pizarra:" FontSize="12" FontWeight="SemiBold" Foreground="#495057" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                
+                                <Button Name="BtnSubirLogoIzq" Content="🖼️ Logo Izq" Click="BtnSubirLogoIzq_Click" 
+                                        Background="#4A5568" Foreground="White" FontWeight="SemiBold" FontSize="11" Padding="8,4" BorderThickness="0" Margin="0,0,4,0" Cursor="Hand" ToolTip="Subir o reemplazar logo izquierdo"/>
+                                <Button Name="BtnQuitarLogoIzq" Content="✕" Click="BtnQuitarLogoIzq_Click" 
+                                        Background="#E2E8F0" Foreground="#718096" FontWeight="Bold" FontSize="11" Padding="6,4" BorderThickness="0" Margin="0,0,14,0" Cursor="Hand" ToolTip="Quitar logo izquierdo"/>
+
+                                <Button Name="BtnSubirLogoDer" Content="🖼️ Logo Der" Click="BtnSubirLogoDer_Click" 
+                                        Background="#4A5568" Foreground="White" FontWeight="SemiBold" FontSize="11" Padding="8,4" BorderThickness="0" Margin="0,0,4,0" Cursor="Hand" ToolTip="Subir o reemplazar logo derecho"/>
+                                <Button Name="BtnQuitarLogoDer" Content="✕" Click="BtnQuitarLogoDer_Click" 
+                                        Background="#E2E8F0" Foreground="#718096" FontWeight="Bold" FontSize="11" Padding="6,4" BorderThickness="0" Cursor="Hand" ToolTip="Quitar logo derecho"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Visor principal de la foto actual -->
+                <Border Grid.Row="2" Background="#E9ECEF" CornerRadius="5" Margin="0,0,0,10">
+                    <Image Name="VisorFotoPrincipal" Stretch="Uniform" Margin="5"/>
+                </Border>
+
+                <!-- Panel de Asignación Rápida (Optimizado para evitar cortes en pantallas estándar) -->
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
+                    <TextBlock Text="Dorsal:" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#222"/>
+                    <TextBox Name="InputDorsal" Width="100" FontSize="24" FontWeight="Bold" TextAlignment="Center" Padding="4" Background="#FFFFE0" VerticalAlignment="Center"/>
+                    <Button Name="BtnAsignar" Content="GUARDAR (Enter)" Click="BtnAsignar_Click" FontSize="14" FontWeight="Bold" Background="#28A745" Foreground="White" Padding="14,8" Margin="10,0,0,0" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"/>
+                    <Button Name="BtnDescartar" Content="DESCARTAR FOTO" Click="BtnDescartar_Click" FontSize="14" FontWeight="Bold" Background="#DC3545" Foreground="White" Padding="12,8" Margin="8,0,0,0" BorderThickness="0" Cursor="Hand" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- PANEL DERECHO: COLA DE FOTOS Y MONITOREO -->
+        <Border Grid.Column="2" Background="White" CornerRadius="8" Padding="15" Margin="10,0,0,0">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="5" Color="#D3D3D3" ShadowDepth="1" Opacity="0.5"/>
+            </Border.Effect>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="200"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="Cola de Fotos Pendientes" FontSize="18" FontWeight="Bold" Foreground="#333" Margin="0,0,0,10"/>
+
+                <ListView Grid.Row="1" Name="ListaFotosPendientes" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListView.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <Image Width="80" Height="80" Stretch="UniformToFill">
+                                    <Image.Source>
+                                        <BitmapImage UriSource="{Binding Ruta_Foto}" CacheOption="OnLoad"/>
+                                    </Image.Source>
+                                </Image>
+                                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Hora_Llegada, StringFormat={}{0:HH:mm:ss.fff}}" FontWeight="Bold"/>
+                                    <TextBlock Text="Esperando dorsal..." Foreground="#FF8C00"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <TextBlock Grid.Row="2" Text="Ultimos Registros Exitosos" FontSize="18" FontWeight="Bold" Foreground="#333" Margin="0,15,0,10"/>
+                
+                <ListBox Grid.Row="3" Name="LogExito" Background="#F8F9FA" BorderThickness="1" BorderBrush="#E0E0E0"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

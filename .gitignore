@@ -1,0 +1,27 @@
+## Directorios de compilación y publicación .NET
+bin/
+obj/
+dist/
+publish/
+
+## Configuración de entornos e IDEs (Visual Studio / VS Code)
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Bloqueos y temporales de SQLite
+*.db-wal
+*.db-shm
+
+## Fotos temporales en cola (para no sobrecargar el repositorio)
+Storage/Fotos_Temp/*
+**/Storage/Fotos_Temp/*
+!**/Storage/Fotos_Temp/.gitkeep
+
+## Archivos de registro y temporales
+*.log
+scratch/
+
