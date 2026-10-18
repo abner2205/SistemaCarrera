@@ -1,6 +1,6 @@
 # Race Management & Live Timekeeping Desktop App 🏁
 
-![Project Banner/Screenshot](<img width="1366" height="704" alt="image" src="https://github.com/user-attachments/assets/b420ad03-6045-4c5e-86dc-184fd89b2853" />)
+<img width="1366" height="704" alt="image" src="https://github.com/user-attachments/assets/b420ad03-6045-4c5e-86dc-184fd89b2853" />
 
 ## 📖 Overview
 Managing live sports events requires speed, precision, and reliable offline capabilities. This desktop application is a complete, standalone solution built to manage obstacle race timekeeping, heat generation, and real-time public leaderboards. 
