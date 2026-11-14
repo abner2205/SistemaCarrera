@@ -119,11 +119,13 @@ Cada Requisito Funcional (**RF-01**, **RF-02**, etc.) en `spec.md` debe redactar
 
 - [ ] **T1: [Nombre de la tarea]**
   - **RF Asociados:** RF-01
+  - **Perfil sugerido:** `flash` | `pro` *(según complejidad)*
   - **Archivos:** `Ruta/Al/Archivo.cs`
   - **Hecho cuando:** `dotnet build` compila y el test unitario `TestXYZ` pasa en verde.
 
 - [ ] **T2: [Nombre de la tarea]**
   - **RF Asociados:** RF-02
+  - **Perfil sugerido:** `flash` | `pro`
   - **Archivos:** `Ruta/Al/Archivo.xaml`, `Ruta/Al/Archivo.xaml.cs`
   - **Hecho cuando:** [Criterio objetivo y comprobable].
 ```

@@ -24,7 +24,7 @@ Lee siempre [docs/constitution.md](file:///c:/Users/Armando/Desktop/Workflows/Si
   - Mapeo explícito de qué Requisito Funcional (RF) cubre cada componente.
 - Genera `tasks.md`:
   - Lista ordenada de máximo 10 tareas atómicas e incrementales (T1, T2...).
-  - Cada tarea debe asociar los RF que cubre y un criterio claro de *"Hecho cuando:"*.
+  - Cada tarea debe asociar los RF que cubre, un **Perfil de modelo sugerido** (`flash` para tareas acotadas/mecánicas en 1–2 archivos; `pro` para concurrencia, SQLite/transacciones, multi-archivo acoplado o ciclo de vida complejo) y un criterio claro de *"Hecho cuando:"*.
 
 ## Si te piden un cambio sobre una spec existente
 - Actualiza primero `spec.md` (agregando o modificando los RF en EARS con sus casos límite) y devuelve el diff o resumen de cambios.

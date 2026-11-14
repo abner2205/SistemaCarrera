@@ -10,7 +10,12 @@ Si la petición es un cambio pequeño o puntual que no requiere una spec complet
 1. **Spec**: Pide a `@planner` que redacte `specs/NNN-nombre/spec.md`. Si devuelve preguntas, preséntalas al usuario de una en una y vuelve a llamarlo con las respuestas.
 2. **Clarificación**: Pide a `@reviewer` que revise la spec como QA (solo detecta inconsistencias y casos límite). Muestra el resultado al usuario; si hay observaciones, `@planner` corrige la spec. **PARA** hasta que el usuario apruebe la spec explícitamente.
 3. **Plan y tareas**: Pide a `@planner` que elabore `plan.md` y `tasks.md` basados en la spec aprobada. Muestra un resumen y **PARA** hasta que el usuario los apruebe.
-4. **Implementación**: Llama a `@implementer` UNA vez por tarea (T1, T2…), en orden estricto. Tras cada tarea, verifica que `dotnet build` y los tests (`dotnet test`) estén en verde; si fallan, para y avisa al usuario.
+4. **Implementación**: Llama a `@implementer` UNA vez por tarea (T1, T2…), en orden estricto, seleccionando el perfil de modelo adecuado según la complejidad de la tarea actual (usa el perfil sugerido en `tasks.md` o aplica la regla de selección de abajo). Tras cada tarea, verifica que `dotnet build` y los tests (`dotnet test`) estén en verde; si fallan, para y avisa al usuario.
+
+### Selección de modelo para subagentes (Fase 4 y general)
+- **`@planner` y `@reviewer`**: Usar perfil `pro` (o `inherit` si ya estás en un modelo de razonamiento pesado).
+- **`@implementer` con perfil `flash`**: Tareas acotadas y mecánicas (1–2 archivos, estilos XAML/CSS, helpers simples, pruebas unitarias directas o ediciones con contrato totalmente definido).
+- **`@implementer` con perfil `pro` (o `inherit`)**: Tareas complejas o de alto riesgo (concurrencia/locks, transacciones SQLite/EF Core, sincronización cliente-servidor, refactors de 3+ archivos acoplados, ciclo de vida WPF complejo o correcciones tras un `CAMBIOS NECESARIOS` / fallo previo de `flash`).
 5. **Validación**: Pide a `@reviewer` que valide la implementación RF por RF (Requisitos Funcionales).
 6. **Correcciones**: Si `@reviewer` emite `VEREDICTO: CAMBIOS NECESARIOS`, vuelve a `@implementer` con la lista exacta de correcciones y luego solicita otra revisión a `@reviewer`. Máximo 2 vueltas; si persiste el fallo, para y reporta la situación al usuario.
 7. **Cierre y Sincronización con GitHub**:
