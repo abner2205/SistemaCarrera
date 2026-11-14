@@ -34,6 +34,11 @@ namespace CarreraApp.UI
         public MainWindow()
         {
             InitializeComponent();
+            if (Application.Current != null)
+            {
+                Icon = System.Windows.Media.Imaging.BitmapFrame.Create(
+                    new Uri("pack://application:,,,/CarreraApp;component/Assets/app.ico", UriKind.Absolute));
+            }
 
             // Escuchar eventos del servidor web y del estado global de carrera
             WebServer.NuevaFotoRecibida += WebServer_NuevaFotoRecibida;

@@ -328,6 +328,11 @@ namespace CarreraApp.UI
         {
             _contextFactory = contextFactory ?? (() => new ApplicationDbContext());
             InitializeComponent();
+            if (Application.Current != null)
+            {
+                Icon = System.Windows.Media.Imaging.BitmapFrame.Create(
+                    new Uri("pack://application:,,,/CarreraApp;component/Assets/app.ico", UriKind.Absolute));
+            }
 
             if (Background == null)
             {
