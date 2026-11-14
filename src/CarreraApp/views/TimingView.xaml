@@ -164,11 +164,7 @@
                     <ListView.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <Image Width="80" Height="80" Stretch="UniformToFill">
-                                    <Image.Source>
-                                        <BitmapImage UriSource="{Binding Ruta_Foto}" CacheOption="OnLoad"/>
-                                    </Image.Source>
-                                </Image>
+                                <Image Width="80" Height="80" Stretch="UniformToFill" Source="{Binding Miniatura}"/>
                                 <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Hora_Llegada, StringFormat={}{0:HH:mm:ss.fff}}" FontWeight="Bold"/>
                                     <TextBlock Text="Esperando dorsal..." Foreground="#FF8C00"/>

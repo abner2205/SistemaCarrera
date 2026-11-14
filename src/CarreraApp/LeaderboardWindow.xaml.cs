@@ -1,16 +1,241 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
-using Microsoft.EntityFrameworkCore;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using CarreraApp.Data;
+using CarreraApp.Helpers;
 using CarreraApp.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace CarreraApp.UI
 {
+    /// <summary>
+    /// Coordina recargas concurrentes asignando versiones monotónicas y cancelando
+    /// operaciones previas para descartar resultados obsoletos o fuera de orden.
+    /// </summary>
+    public sealed class ReloadVersionCoordinator : IDisposable
+    {
+        private readonly object _sync = new();
+        private CancellationTokenSource? _ctsActual;
+        private long _versionActual;
+        private bool _disposed;
+
+        public (long Version, CancellationToken Token) IniciarNuevaRecarga()
+        {
+            long nuevaVersion = Interlocked.Increment(ref _versionActual);
+            var nuevoCts = new CancellationTokenSource();
+            CancellationTokenSource? anterior;
+
+            lock (_sync)
+            {
+                if (_disposed)
+                {
+                    nuevoCts.Cancel();
+                    return (nuevaVersion, nuevoCts.Token);
+                }
+
+                anterior = _ctsActual;
+                _ctsActual = nuevoCts;
+            }
+
+            CancelarYDisponerSilencioso(anterior);
+            return (nuevaVersion, nuevoCts.Token);
+        }
+
+        public bool EsVigente(long version) =>
+            !Volatile.Read(ref _disposed) && version == Volatile.Read(ref _versionActual);
+
+        public void CancelarYLimpiar()
+        {
+            Interlocked.Increment(ref _versionActual);
+            CancellationTokenSource? anterior;
+            lock (_sync)
+            {
+                anterior = _ctsActual;
+                _ctsActual = null;
+            }
+
+            CancelarYDisponerSilencioso(anterior);
+        }
+
+        public void Dispose()
+        {
+            Volatile.Write(ref _disposed, true);
+            CancelarYLimpiar();
+        }
+
+        private static void CancelarYDisponerSilencioso(CancellationTokenSource? cts)
+        {
+            if (cts == null)
+            {
+                return;
+            }
+
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignorar si ya fue dispuesto
+            }
+            finally
+            {
+                cts.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Caché en memoria de logotipos por ruta normalizada para evitar lecturas
+    /// repetidas desde disco cuando las rutas no cambian.
+    /// </summary>
+    public sealed class LogoRouteCache
+    {
+        private const int LimiteEntradas = 16;
+        private readonly Dictionary<string, BitmapImage> _cache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly object _sync = new();
+
+        public int Count
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _cache.Count;
+                }
+            }
+        }
+
+        public bool ContieneRuta(string? ruta)
+        {
+            if (string.IsNullOrWhiteSpace(ruta))
+            {
+                return false;
+            }
+
+            string clave = NormalizarClave(ruta);
+            lock (_sync)
+            {
+                return _cache.ContainsKey(clave);
+            }
+        }
+
+        public async Task<BitmapImage?> ObtenerOCargarAsync(
+            string? ruta,
+            Func<string, CancellationToken, Task<BitmapImage?>>? cargador = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(ruta))
+            {
+                return null;
+            }
+
+            string clave = NormalizarClave(ruta);
+            lock (_sync)
+            {
+                if (_cache.TryGetValue(clave, out BitmapImage? existente))
+                {
+                    return existente;
+                }
+            }
+
+            var loader = cargador ?? ((path, ct) => ImageHelper.CargarSinBloqueoAsync(path, decodePixelWidth: 280, ct));
+            BitmapImage? cargado = await loader(ruta, cancellationToken).ConfigureAwait(false);
+            if (cargado == null)
+            {
+                return null;
+            }
+
+            if (!cargado.IsFrozen && cargado.CanFreeze)
+            {
+                cargado.Freeze();
+            }
+
+            lock (_sync)
+            {
+                if (_cache.Count >= LimiteEntradas && !_cache.ContainsKey(clave))
+                {
+                    _cache.Clear();
+                }
+
+                _cache[clave] = cargado;
+            }
+
+            return cargado;
+        }
+
+        public void RetenerSolo(params string?[] rutasActivas)
+        {
+            var clavesActivas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string? ruta in rutasActivas)
+            {
+                if (!string.IsNullOrWhiteSpace(ruta))
+                {
+                    clavesActivas.Add(NormalizarClave(ruta));
+                }
+            }
+
+            lock (_sync)
+            {
+                if (_cache.Count == 0)
+                {
+                    return;
+                }
+
+                var obsoletas = _cache.Keys.Where(k => !clavesActivas.Contains(k)).ToList();
+                foreach (string clave in obsoletas)
+                {
+                    _cache.Remove(clave);
+                }
+            }
+        }
+
+        public void Limpiar()
+        {
+            lock (_sync)
+            {
+                _cache.Clear();
+            }
+        }
+
+        private static string NormalizarClave(string ruta)
+        {
+            try
+            {
+                return Path.GetFullPath(ruta.Trim());
+            }
+            catch
+            {
+                return ruta.Trim();
+            }
+        }
+    }
+
     public class ResultadoView
     {
+        private static readonly SolidColorBrush BordeOro = CrearPincelCongelado("#FFC700");
+        private static readonly SolidColorBrush BordePlata = CrearPincelCongelado("#B0B7BD");
+        private static readonly SolidColorBrush BordeBronce = CrearPincelCongelado("#CD7F32");
+        private static readonly SolidColorBrush BordeDefault = CrearPincelCongelado("#333333");
+
+        private static readonly SolidColorBrush FondoOro = CrearPincelCongelado("#1A1707");
+        private static readonly SolidColorBrush FondoPlata = CrearPincelCongelado("#14171A");
+        private static readonly SolidColorBrush FondoBronce = CrearPincelCongelado("#1A1108");
+        private static readonly SolidColorBrush FondoDefault = CrearPincelCongelado("#121216");
+
+        private static readonly SolidColorBrush TextoOro = BordeOro;
+        private static readonly SolidColorBrush TextoPlata = CrearPincelCongelado("#D0D4D9");
+        private static readonly SolidColorBrush TextoBronce = BordeBronce;
+        private static readonly SolidColorBrush TextoDefault = CrearPincelCongelado("#888888");
+
         public int Posicion { get; set; }
         public int Dorsal { get; set; }
         public string Nombre { get; set; } = string.Empty;
@@ -19,29 +244,29 @@ namespace CarreraApp.UI
 
         public string IconoPuesto => $"{Posicion}°";
 
-        // Estilos para el Podio (1°, 2° y 3°)
-        public string ColorBordePodio => Posicion switch
+        // Estilos con pinceles congelados para el Podio (1°, 2° y 3°)
+        public Brush ColorBordePodio => Posicion switch
         {
-            1 => "#FFC700", // Oro brillante
-            2 => "#B0B7BD", // Plata metálico
-            3 => "#CD7F32", // Bronce cálido
-            _ => "#333333"
+            1 => BordeOro,
+            2 => BordePlata,
+            3 => BordeBronce,
+            _ => BordeDefault
         };
 
-        public string ColorFondoPodio => Posicion switch
+        public Brush ColorFondoPodio => Posicion switch
         {
-            1 => "#1A1707", // Fondo oscuro con tinte oro
-            2 => "#14171A", // Fondo oscuro con tinte plata
-            3 => "#1A1108", // Fondo oscuro con tinte bronce
-            _ => "#121216"
+            1 => FondoOro,
+            2 => FondoPlata,
+            3 => FondoBronce,
+            _ => FondoDefault
         };
 
-        public string ColorTextoPodio => Posicion switch
+        public Brush ColorTextoPodio => Posicion switch
         {
-            1 => "#FFC700",
-            2 => "#D0D4D9",
-            3 => "#CD7F32",
-            _ => "#888888"
+            1 => TextoOro,
+            2 => TextoPlata,
+            3 => TextoBronce,
+            _ => TextoDefault
         };
 
         public double AlturaPodio => Posicion switch
@@ -75,45 +300,128 @@ namespace CarreraApp.UI
             3 => 18,
             _ => 14
         };
+
+        private static SolidColorBrush CrearPincelCongelado(string hex)
+        {
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            brush.Freeze();
+            return brush;
+        }
     }
 
     public partial class LeaderboardWindow : Window
     {
-        public LeaderboardWindow()
+        private readonly Func<ApplicationDbContext> _contextFactory;
+        private readonly ReloadVersionCoordinator _reloadCoordinator = new();
+        private readonly LogoRouteCache _logoCache = new();
+        private bool _cerrada;
+
+        public LeaderboardWindow() : this(null)
         {
+        }
+
+        public LeaderboardWindow(Func<ApplicationDbContext>? contextFactory)
+        {
+            _contextFactory = contextFactory ?? (() => new ApplicationDbContext());
             InitializeComponent();
-            
-            // Suscribirse a eventos de nuevos tiempos y cambio de categoría
-            AppState.NuevoTiempoRegistrado += ActualizarPizarra;
-            AppState.CategoriaPizarraCambiada += ActualizarPizarra;
+
+            AppState.NuevoTiempoRegistrado += OnEventoPizarra;
+            AppState.CategoriaPizarraCambiada += OnEventoPizarra;
+            AppState.CarreraActivaCambiada += OnEventoPizarra;
 
             ActualizarPizarra();
         }
 
-        public async void ActualizarPizarra()
+        private void OnEventoPizarra()
         {
+            if (_cerrada)
+            {
+                return;
+            }
+
+            _ = ActualizarPizarraAsync();
+        }
+
+        public void ActualizarPizarra()
+        {
+            _ = ActualizarPizarraAsync();
+        }
+
+        public async Task ActualizarPizarraAsync()
+        {
+            if (_cerrada)
+            {
+                return;
+            }
+
+            (long versionSolicitada, CancellationToken ct) = _reloadCoordinator.IniciarNuevaRecarga();
+
             try
             {
-                if (AppState.CarreraActiva == null) return;
-                int idCarreraActual = AppState.CarreraActiva.ID_Carrera;
-
-                // Si no hay categoría activa fijada en AppState, obtener la primera de la carrera activa
-                if (AppState.CategoriaPizarraActiva == null)
+                Carrera? carrera = AppState.CarreraActiva;
+                if (carrera == null)
                 {
-                    using var dbInit = new ApplicationDbContext();
-                    AppState.CategoriaPizarraActiva = await dbInit.Categorias.AsNoTracking()
-                        .FirstOrDefaultAsync(c => c.ID_Carrera == idCarreraActual);
+                    _logoCache.Limpiar();
+                    await AplicarEstadoVacioAsync(versionSolicitada, ct).ConfigureAwait(false);
+                    return;
                 }
 
-                if (AppState.CategoriaPizarraActiva == null) return;
+                int idCarreraActual = carrera.ID_Carrera;
+                string nombreCarrera = carrera.Nombre;
+                string? rutaLogoIzq = carrera.RutaLogoIzquierdo;
+                string? rutaLogoDer = carrera.RutaLogoDerecho;
+                Categoria? categoriaActiva = AppState.CategoriaPizarraActiva;
 
-                int idCategoria = AppState.CategoriaPizarraActiva.ID_Categoria;
-                string nombreCategoria = AppState.CategoriaPizarraActiva.Nombre;
-                string nombreCarrera = AppState.CarreraActiva.Nombre;
+                if (categoriaActiva == null || categoriaActiva.ID_Carrera != idCarreraActual)
+                {
+                    using var dbInit = _contextFactory();
+                    categoriaActiva = await dbInit.Categorias
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.ID_Carrera == idCarreraActual, ct)
+                        .ConfigureAwait(false);
 
-                using var db = new ApplicationDbContext();
+                    if (!PuedeAplicarResultado(versionSolicitada, ct))
+                    {
+                        return;
+                    }
 
-                // 1. Filtrar en SQLite por carrera y categoría seleccionada
+                    if (AppState.CarreraActiva?.ID_Carrera == idCarreraActual)
+                    {
+                        AppState.CategoriaPizarraActiva = categoriaActiva;
+                    }
+                }
+
+                BitmapImage? logoIzq = await _logoCache
+                    .ObtenerOCargarAsync(rutaLogoIzq, cancellationToken: ct)
+                    .ConfigureAwait(false);
+                BitmapImage? logoDer = await _logoCache
+                    .ObtenerOCargarAsync(rutaLogoDer, cancellationToken: ct)
+                    .ConfigureAwait(false);
+
+                _logoCache.RetenerSolo(rutaLogoIzq, rutaLogoDer);
+
+                if (!PuedeAplicarResultado(versionSolicitada, ct))
+                {
+                    return;
+                }
+
+                if (categoriaActiva == null)
+                {
+                    await AplicarEnUiSiVigenteAsync(versionSolicitada, ct, () =>
+                    {
+                        TxtNombreCarrera.Text = nombreCarrera.ToUpper();
+                        TxtNombreCategoria.Text = "Sin categorías registradas";
+                        ListaPodio.ItemsSource = Array.Empty<ResultadoView>();
+                        ListaResto.ItemsSource = Array.Empty<ResultadoView>();
+                        AplicarLogosEnControles(logoIzq, logoDer);
+                    }).ConfigureAwait(false);
+                    return;
+                }
+
+                int idCategoria = categoriaActiva.ID_Categoria;
+                string nombreCategoria = categoriaActiva.Nombre;
+
+                using var db = _contextFactory();
                 var datosBrutos = await (from t in db.Tiempos.AsNoTracking()
                                          join c in db.Corredores.AsNoTracking() on t.ID_Corredor equals c.ID_Corredor
                                          where c.ID_Categoria == idCategoria && c.ID_Carrera == idCarreraActual
@@ -122,9 +430,15 @@ namespace CarreraApp.UI
                                              c.Dorsal,
                                              c.Nombre,
                                              t.Tiempo_Neto
-                                         }).ToListAsync();
+                                         })
+                    .ToListAsync(ct)
+                    .ConfigureAwait(false);
 
-                // 2. Ordenar en memoria (LINQ to Objects) con precisión completa de TimeSpan
+                if (!PuedeAplicarResultado(versionSolicitada, ct))
+                {
+                    return;
+                }
+
                 var consulta = datosBrutos
                     .OrderBy(x => x.Tiempo_Neto)
                     .Select((x, index) => new ResultadoView
@@ -136,65 +450,86 @@ namespace CarreraApp.UI
                     })
                     .ToList();
 
-                // Separar Podio (1°, 2° y 3°) y Resto de competidores (4° en adelante)
                 var podio = consulta.Take(3).ToList();
                 var resto = consulta.Skip(3).ToList();
 
-                Dispatcher.Invoke(() =>
+                await AplicarEnUiSiVigenteAsync(versionSolicitada, ct, () =>
                 {
                     TxtNombreCarrera.Text = nombreCarrera.ToUpper();
                     TxtNombreCategoria.Text = $"Resultados: {nombreCategoria}";
-
                     ListaPodio.ItemsSource = podio;
                     ListaResto.ItemsSource = resto;
-
-                    CargarLogos();
-                });
+                    AplicarLogosEnControles(logoIzq, logoDer);
+                }).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested || _cerrada)
+            {
+                // Recarga cancelada por existir una solicitud más reciente o cierre de ventana
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error al actualizar pizarra: {ex.Message}");
+                Trace.TraceWarning($"[LeaderboardWindow] Error al actualizar pizarra: {ex.Message}");
             }
         }
 
-        private void CargarLogos()
+        private bool PuedeAplicarResultado(long versionSolicitada, CancellationToken ct) =>
+            !_cerrada && !ct.IsCancellationRequested && _reloadCoordinator.EsVigente(versionSolicitada);
+
+        private async Task AplicarEstadoVacioAsync(long versionSolicitada, CancellationToken ct)
         {
-            if (AppState.CarreraActiva == null)
+            await AplicarEnUiSiVigenteAsync(versionSolicitada, ct, () =>
             {
-                ImgLogoIzquierdo.Visibility = Visibility.Collapsed;
-                ImgLogoDerecho.Visibility = Visibility.Collapsed;
+                TxtNombreCarrera.Text = "SIN CARRERA ACTIVA";
+                TxtNombreCategoria.Text = "Selecciona una carrera";
+                ListaPodio.ItemsSource = Array.Empty<ResultadoView>();
+                ListaResto.ItemsSource = Array.Empty<ResultadoView>();
+                AplicarLogosEnControles(null, null);
+            }).ConfigureAwait(false);
+        }
+
+        private async Task AplicarEnUiSiVigenteAsync(long versionSolicitada, CancellationToken ct, Action actualizarUi)
+        {
+            if (!PuedeAplicarResultado(versionSolicitada, ct) || Dispatcher.HasShutdownStarted)
+            {
                 return;
             }
 
-            // Logo Izquierdo
-            if (!string.IsNullOrEmpty(AppState.CarreraActiva.RutaLogoIzquierdo) && File.Exists(AppState.CarreraActiva.RutaLogoIzquierdo))
+            await Dispatcher.InvokeAsync(() =>
             {
-                ImgLogoIzquierdo.Source = Helpers.ImageHelper.CargarSinBloqueo(AppState.CarreraActiva.RutaLogoIzquierdo);
-                ImgLogoIzquierdo.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                ImgLogoIzquierdo.Source = null;
-                ImgLogoIzquierdo.Visibility = Visibility.Collapsed;
-            }
+                if (!PuedeAplicarResultado(versionSolicitada, ct))
+                {
+                    return;
+                }
 
-            // Logo Derecho
-            if (!string.IsNullOrEmpty(AppState.CarreraActiva.RutaLogoDerecho) && File.Exists(AppState.CarreraActiva.RutaLogoDerecho))
-            {
-                ImgLogoDerecho.Source = Helpers.ImageHelper.CargarSinBloqueo(AppState.CarreraActiva.RutaLogoDerecho);
-                ImgLogoDerecho.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                ImgLogoDerecho.Source = null;
-                ImgLogoDerecho.Visibility = Visibility.Collapsed;
-            }
+                actualizarUi();
+            }, DispatcherPriority.Normal);
+        }
+
+        private void AplicarLogosEnControles(BitmapImage? logoIzq, BitmapImage? logoDer)
+        {
+            ImgLogoIzquierdo.Source = logoIzq;
+            ImgLogoIzquierdo.Visibility = logoIzq != null ? Visibility.Visible : Visibility.Collapsed;
+
+            ImgLogoDerecho.Source = logoDer;
+            ImgLogoDerecho.Visibility = logoDer != null ? Visibility.Visible : Visibility.Collapsed;
         }
 
         protected override void OnClosed(EventArgs e)
         {
-            AppState.NuevoTiempoRegistrado -= ActualizarPizarra;
-            AppState.CategoriaPizarraCambiada -= ActualizarPizarra;
+            _cerrada = true;
+
+            AppState.NuevoTiempoRegistrado -= OnEventoPizarra;
+            AppState.CategoriaPizarraCambiada -= OnEventoPizarra;
+            AppState.CarreraActivaCambiada -= OnEventoPizarra;
+
+            _reloadCoordinator.Dispose();
+            _logoCache.Limpiar();
+
+            ImgLogoIzquierdo.Source = null;
+            ImgLogoDerecho.Source = null;
+            ListaPodio.ItemsSource = null;
+            ListaResto.ItemsSource = null;
+
             base.OnClosed(e);
         }
     }

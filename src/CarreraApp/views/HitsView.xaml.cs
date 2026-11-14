@@ -1,8 +1,7 @@
 using System;
-using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using Microsoft.EntityFrameworkCore;
 using CarreraApp.Data;
 using CarreraApp.Models;
 
@@ -10,6 +9,8 @@ namespace CarreraApp.UI.Views
 {
     public partial class HitsView : UserControl
     {
+        private readonly RaceDataService _raceDataService = new();
+
         // Variables para controlar el estado de edición
         private Hit? _hitEnEdicion = null;
         private Categoria? _categoriaEnEdicion = null;
@@ -17,17 +18,22 @@ namespace CarreraApp.UI.Views
         public HitsView()
         {
             InitializeComponent();
-            CargarDatos();
+            _ = CargarDatosAsync();
         }
 
-        private async void CargarDatos()
+        private async Task CargarDatosAsync()
         {
             if (AppState.CarreraActiva == null) return;
-            using (var db = new ApplicationDbContext())
+
+            try
             {
                 int idCarrera = AppState.CarreraActiva.ID_Carrera;
-                TablaHits.ItemsSource = await db.Hits.AsNoTracking().Where(h => h.ID_Carrera == idCarrera).ToListAsync();
-                TablaCategorias.ItemsSource = await db.Categorias.AsNoTracking().Where(c => c.ID_Carrera == idCarrera).ToListAsync();
+                TablaHits.ItemsSource = await _raceDataService.ObtenerHitsPorCarreraAsync(idCarrera);
+                TablaCategorias.ItemsSource = await _raceDataService.ObtenerCategoriasPorCarreraAsync(idCarrera);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error al cargar hits y categorías: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -35,30 +41,30 @@ namespace CarreraApp.UI.Views
 
         private async void BtnGuardarHit_Click(object sender, RoutedEventArgs e)
         {
-            string nombre = InputNombreHit.Text.Trim();
-            if (string.IsNullOrEmpty(nombre) || AppState.CarreraActiva == null) return;
+            if (AppState.CarreraActiva == null) return;
 
-            using (var db = new ApplicationDbContext())
+            try
             {
-                if (_hitEnEdicion == null)
-                {
-                    // Crear nuevo
-                    db.Hits.Add(new Hit { Nombre_Hit = nombre, ID_Carrera = AppState.CarreraActiva.ID_Carrera });
-                }
-                else
-                {
-                    // Actualizar existente
-                    var hitDb = await db.Hits.FindAsync(_hitEnEdicion.ID_Hit);
-                    if (hitDb != null) hitDb.Nombre_Hit = nombre;
-                    
-                    _hitEnEdicion = null;
-                    BtnAccionHit.Content = "GUARDAR HIT";
-                }
-                await db.SaveChangesAsync();
-            }
+                OperacionResultado<Hit> resultado = await _raceDataService.CrearOActualizarHitAsync(
+                    _hitEnEdicion?.ID_Hit,
+                    AppState.CarreraActiva.ID_Carrera,
+                    InputNombreHit.Text);
 
-            InputNombreHit.Clear();
-            CargarDatos();
+                if (!resultado.Exito)
+                {
+                    MessageBox.Show(resultado.Mensaje, "Validación de Hit", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                _hitEnEdicion = null;
+                BtnAccionHit.Content = "GUARDAR HIT";
+                InputNombreHit.Clear();
+                await CargarDatosAsync();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error al guardar el Hit: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void BtnEditarHit_Click(object sender, RoutedEventArgs e)
@@ -80,16 +86,25 @@ namespace CarreraApp.UI.Views
                 {
                     try
                     {
-                        using (var db = new ApplicationDbContext())
+                        OperacionResultado resultado = await _raceDataService.EliminarHitAsync(hitSeleccionado.ID_Hit);
+                        if (!resultado.Exito)
                         {
-                            db.Hits.Remove(hitSeleccionado);
-                            await db.SaveChangesAsync();
+                            MessageBox.Show(resultado.Mensaje, "Eliminación Protegida", MessageBoxButton.OK, MessageBoxImage.Error);
+                            return;
                         }
-                        CargarDatos();
+
+                        if (_hitEnEdicion?.ID_Hit == hitSeleccionado.ID_Hit)
+                        {
+                            _hitEnEdicion = null;
+                            BtnAccionHit.Content = "GUARDAR HIT";
+                            InputNombreHit.Clear();
+                        }
+
+                        await CargarDatosAsync();
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        MessageBox.Show("No se puede eliminar porque hay corredores asignados a este Hit.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show($"Error al eliminar el Hit: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
@@ -99,28 +114,30 @@ namespace CarreraApp.UI.Views
 
         private async void BtnGuardarCategoria_Click(object sender, RoutedEventArgs e)
         {
-            string nombre = InputNombreCategoria.Text.Trim();
-            if (string.IsNullOrEmpty(nombre) || AppState.CarreraActiva == null) return;
+            if (AppState.CarreraActiva == null) return;
 
-            using (var db = new ApplicationDbContext())
+            try
             {
-                if (_categoriaEnEdicion == null)
-                {
-                    db.Categorias.Add(new Categoria { Nombre = nombre, ID_Carrera = AppState.CarreraActiva.ID_Carrera });
-                }
-                else
-                {
-                    var catDb = await db.Categorias.FindAsync(_categoriaEnEdicion.ID_Categoria);
-                    if (catDb != null) catDb.Nombre = nombre;
+                OperacionResultado<Categoria> resultado = await _raceDataService.CrearOActualizarCategoriaAsync(
+                    _categoriaEnEdicion?.ID_Categoria,
+                    AppState.CarreraActiva.ID_Carrera,
+                    InputNombreCategoria.Text);
 
-                    _categoriaEnEdicion = null;
-                    BtnAccionCategoria.Content = "GUARDAR CATEGORÍA";
+                if (!resultado.Exito)
+                {
+                    MessageBox.Show(resultado.Mensaje, "Validación de Categoría", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
-                await db.SaveChangesAsync();
+
+                _categoriaEnEdicion = null;
+                BtnAccionCategoria.Content = "GUARDAR CATEGORÍA";
+                InputNombreCategoria.Clear();
+                await CargarDatosAsync();
             }
-
-            InputNombreCategoria.Clear();
-            CargarDatos();
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error al guardar la categoría: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void BtnEditarCategoria_Click(object sender, RoutedEventArgs e)
@@ -142,16 +159,25 @@ namespace CarreraApp.UI.Views
                 {
                     try
                     {
-                        using (var db = new ApplicationDbContext())
+                        OperacionResultado resultado = await _raceDataService.EliminarCategoriaAsync(catSeleccionada.ID_Categoria);
+                        if (!resultado.Exito)
                         {
-                            db.Categorias.Remove(catSeleccionada);
-                            await db.SaveChangesAsync();
+                            MessageBox.Show(resultado.Mensaje, "Eliminación Protegida", MessageBoxButton.OK, MessageBoxImage.Error);
+                            return;
                         }
-                        CargarDatos();
+
+                        if (_categoriaEnEdicion?.ID_Categoria == catSeleccionada.ID_Categoria)
+                        {
+                            _categoriaEnEdicion = null;
+                            BtnAccionCategoria.Content = "GUARDAR CATEGORÍA";
+                            InputNombreCategoria.Clear();
+                        }
+
+                        await CargarDatosAsync();
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        MessageBox.Show("No se puede eliminar porque hay corredores asignados a esta Categoría.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show($"Error al eliminar la categoría: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }

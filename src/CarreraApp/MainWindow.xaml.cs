@@ -1,187 +1,381 @@
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
 using System.Windows;
-using CarreraApp.UI.Views;
-using CarreraApp.Models;
+using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using CarreraApp.Data;
-using System.IO;
-using Microsoft.EntityFrameworkCore;
+using CarreraApp.Helpers;
+using CarreraApp.Models;
+using CarreraApp.Server;
+using CarreraApp.UI.Views;
 
 namespace CarreraApp.UI
 {
     public partial class MainWindow : Window
     {
+        private readonly CancellationTokenSource _cerrarCts = new();
+        private LeaderboardWindow? _ventanaPizarra;
+        private bool _estaCerrada;
+
+        public event Action<bool>? EstadoPizarraCambiado;
+
+        public bool PizarraEstaAbierta => _ventanaPizarra != null && _ventanaPizarra.IsLoaded;
+
+        public bool PizarraEstaEnPantallaCompleta =>
+            PizarraEstaAbierta && _ventanaPizarra!.WindowStyle == WindowStyle.None;
+
         public MainWindow()
         {
             InitializeComponent();
-            
-            // Escuchar al servidor globalmente
-            Server.WebServer.NuevaFotoRecibida += WebServer_NuevaFotoRecibida;
-            Server.WebServer.DorsalAsignadoRemoto += WebServer_DorsalAsignadoRemoto;
-            Server.WebServer.FotoDescartadaRemota += WebServer_FotoDescartadaRemota;
 
-            ContenedorPrincipal.Content = new Views.WelcomeView();
+            // Escuchar eventos del servidor web y del estado global de carrera
+            WebServer.NuevaFotoRecibida += WebServer_NuevaFotoRecibida;
+            WebServer.FotoAsignadaRemota += WebServer_FotoAsignadaRemota;
+            WebServer.FotoDescartadaRemota += WebServer_FotoDescartadaRemota;
+            WebServer.ErrorCriticoServidor += WebServer_ErrorCriticoServidor;
+            AppState.CarreraActivaCambiada += AppState_CarreraActivaCambiada;
+
+            NavegarAVista(new WelcomeView());
         }
 
-        // 1. Recibe la foto siempre, sin importar la pestaña abierta
-        private void WebServer_NuevaFotoRecibida(string idFoto, DateTime horaLlegada, string rutaFoto)
+        public void NavegarAVista(UserControl nuevaVista)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            ArgumentNullException.ThrowIfNull(nuevaVista);
+
+            // Evitar ventanas de pizarra huérfanas al salir de cronometraje o cambiar de pantalla
+            if (nuevaVista is not TimingView || !ReferenceEquals(ContenedorPrincipal.Content, nuevaVista))
             {
-                AppState.FotosEnEsperaGlobal.Add(new FotoPendiente { IdFoto = idFoto, Hora_Llegada = horaLlegada, Ruta_Foto = rutaFoto });
-            });
-        }
-
-        // 2. Procesa la asignación remota y mueve el archivo en segundo plano
-        private async void WebServer_DorsalAsignadoRemoto(string idFoto, int dorsalNum)
-        {
-            try
-            {
-                FotoPendiente? fotoActual = null;
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    fotoActual = AppState.FotosEnEsperaGlobal.FirstOrDefault(f => f.IdFoto == idFoto);
-                });
-
-                // Respaldo: si la foto aún no entró a la colección de UI, buscarla físicamente en Fotos_Temp
-                if (fotoActual == null)
-                {
-                    string rutaTemp = Path.Combine(Helpers.StorageHelper.ObtenerCarpetaFotosTemp(), $"{idFoto}.jpg");
-                    if (File.Exists(rutaTemp))
-                    {
-                        fotoActual = new FotoPendiente
-                        {
-                            IdFoto = idFoto,
-                            Hora_Llegada = DateTime.Now,
-                            Ruta_Foto = rutaTemp
-                        };
-                    }
-                }
-
-                if (fotoActual == null)
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                        AppState.RegistrosExitososGlobal.Insert(0, $"[AVISO REMOTO] Foto {idFoto} no encontrada para dorsal {dorsalNum}."));
-                    return;
-                }
-
-                // Si no hay carrera activa seleccionada en la UI, tomar la carrera más reciente de la BD
-                if (AppState.CarreraActiva == null)
-                {
-                    using var db = new CarreraApp.Data.ApplicationDbContext();
-                    AppState.CarreraActiva = await db.Carreras.OrderByDescending(c => c.Fecha).FirstOrDefaultAsync();
-                }
-
-                if (AppState.CarreraActiva == null)
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                        AppState.RegistrosExitososGlobal.Insert(0, $"[RECHAZADO REMOTO] No hay carreras registradas en el sistema."));
-                    return;
-                }
-
-                var dataService = new CarreraApp.Data.RaceDataService();
-                var resultado = await dataService.AsignarTiempoAsync(
-                    AppState.CarreraActiva.ID_Carrera,
-                    AppState.CarreraActiva.Nombre,
-                    dorsalNum,
-                    fotoActual.Hora_Llegada,
-                    fotoActual.Ruta_Foto
-                );
-
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    if (resultado.Exito)
-                    {
-                        AppState.NotificarNuevoTiempo();
-                        AppState.RegistrosExitososGlobal.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Remoto: {resultado.Mensaje}");
-                        if (resultado.HitFinalizado)
-                        {
-                            AppState.RegistrosExitososGlobal.Insert(0, $"[HIT FINALIZADO] ¡Todos los corredores de '{resultado.NombreHitFinalizado}' han llegado a la meta!");
-                        }
-                        AppState.FotosEnEsperaGlobal.Remove(fotoActual);
-                        Server.WebServer.EliminarFotoPendiente(idFoto);
-                    }
-                    else
-                    {
-                        AppState.RegistrosExitososGlobal.Insert(0, $"[RECHAZADO REMOTO] {resultado.Mensaje}");
-                    }
-                });
+                CerrarPizarra();
             }
-            catch (Exception ex)
-            {
-                Application.Current.Dispatcher.Invoke(() => 
-                    AppState.RegistrosExitososGlobal.Insert(0, $"[CRÍTICO] Fallo remoto: {ex.Message}"));
-            }
-        }
 
-        // Mostrar / Ocultar menú lateral
-        private void BtnHamburguesa_Click(object sender, RoutedEventArgs e)
-        {
-            PanelLateral.Visibility = PanelLateral.Visibility == Visibility.Visible 
-                                      ? Visibility.Collapsed 
-                                      : Visibility.Visible;
-        }
-
-        // Navegación a Inicio
-        private void NavInicio_Click(object sender, RoutedEventArgs e)
-        {
-            ContenedorPrincipal.Content = new WelcomeView();
-            PanelLateral.Visibility = Visibility.Collapsed; // Auto-ocultar menú al hacer clic
-        }
-
-        // Navegación al Cronometraje
-        private void NavCronometraje_Click(object sender, RoutedEventArgs e)
-        {
-            ContenedorPrincipal.Content = new TimingView();
+            ContenedorPrincipal.Content = nuevaVista;
             PanelLateral.Visibility = Visibility.Collapsed;
         }
-        private void NavCorredores_Click(object sender, RoutedEventArgs e)
+
+        public void AlternarPizarra()
         {
-            if (Models.AppState.CarreraActiva == null)
+            if (_estaCerrada)
             {
-                MessageBox.Show("Por favor, selecciona o crea una carrera en el Inicio primero.", "Atención", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            ContenedorPrincipal.Content = new Views.CorredoresView();
-            PanelLateral.Visibility = Visibility.Collapsed;
-        }
 
-        private void NavHits_Click(object sender, RoutedEventArgs e)
-        {
-            if (Models.AppState.CarreraActiva == null)
+            if (PizarraEstaAbierta)
             {
-                MessageBox.Show("Por favor, selecciona o crea una carrera en el Inicio primero.", "Atención", MessageBoxButton.OK, MessageBoxImage.Warning);
+                CerrarPizarra();
                 return;
             }
-            ContenedorPrincipal.Content = new Views.HitsView();
-            PanelLateral.Visibility = Visibility.Collapsed;
+
+            var pizarra = new LeaderboardWindow();
+            _ventanaPizarra = pizarra;
+            pizarra.Closed += VentanaPizarra_Closed;
+            pizarra.Show();
+            EstadoPizarraCambiado?.Invoke(true);
         }
-        // Método público para actualizar el título desde otras vistas
+
+        public bool AlternarPantallaCompletaPizarra()
+        {
+            if (!PizarraEstaAbierta || _ventanaPizarra == null)
+            {
+                return false;
+            }
+
+            if (_ventanaPizarra.WindowStyle == WindowStyle.None)
+            {
+                _ventanaPizarra.WindowStyle = WindowStyle.SingleBorderWindow;
+                _ventanaPizarra.WindowState = WindowState.Normal;
+                return false;
+            }
+
+            _ventanaPizarra.WindowStyle = WindowStyle.None;
+            _ventanaPizarra.WindowState = WindowState.Maximized;
+            return true;
+        }
+
+        public void CerrarPizarra()
+        {
+            LeaderboardWindow? pizarra = _ventanaPizarra;
+            if (pizarra == null)
+            {
+                return;
+            }
+
+            _ventanaPizarra = null;
+            pizarra.Closed -= VentanaPizarra_Closed;
+
+            if (pizarra.IsLoaded)
+            {
+                pizarra.Close();
+            }
+
+            EstadoPizarraCambiado?.Invoke(false);
+        }
+
         public void ActualizarTituloCarrera()
         {
-            if (Models.AppState.CarreraActiva != null)
+            if (AppState.CarreraActiva != null)
             {
-                TxtNombreCarrera.Text = $"CARRERA APP - {Models.AppState.CarreraActiva.Nombre.ToUpper()}";
+                TxtNombreCarrera.Text = $"CARRERA APP - {AppState.CarreraActiva.Nombre.ToUpper()}";
             }
             else
             {
                 TxtNombreCarrera.Text = "CARRERA APP";
             }
         }
-        private void WebServer_FotoDescartadaRemota(string idFoto)
+
+        private void VentanaPizarra_Closed(object? sender, EventArgs e)
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            if (sender is LeaderboardWindow pizarra)
             {
-                var fotoActual = AppState.FotosEnEsperaGlobal.FirstOrDefault(f => f.IdFoto == idFoto);
+                pizarra.Closed -= VentanaPizarra_Closed;
+                if (ReferenceEquals(_ventanaPizarra, pizarra))
+                {
+                    _ventanaPizarra = null;
+                }
+            }
+
+            EstadoPizarraCambiado?.Invoke(false);
+        }
+
+        private void AppState_CarreraActivaCambiada()
+        {
+            if (_estaCerrada || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (_estaCerrada)
+                {
+                    return;
+                }
+
+                ActualizarTituloCarrera();
+                if (AppState.CarreraActiva == null || ContenedorPrincipal.Content is not TimingView)
+                {
+                    CerrarPizarra();
+                }
+            });
+        }
+
+        // 1. Recibe la foto y decodifica la miniatura escalada (160 px) fuera del hilo UI
+        private async void WebServer_NuevaFotoRecibida(string idFoto, DateTime horaLlegada, string rutaFoto)
+        {
+            if (_estaCerrada || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            try
+            {
+                var foto = new FotoPendiente
+                {
+                    IdFoto = idFoto,
+                    Hora_Llegada = horaLlegada,
+                    Ruta_Foto = rutaFoto
+                };
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (_estaCerrada || !WebServer.ObtenerIdsFotosPendientes().Contains(idFoto))
+                    {
+                        return;
+                    }
+
+                    if (!AppState.FotosEnEsperaGlobal.Any(f => f.IdFoto == idFoto))
+                    {
+                        AppState.FotosEnEsperaGlobal.Add(foto);
+                    }
+                });
+
+                BitmapImage? miniatura = await ImageHelper
+                    .CargarSinBloqueoAsync(rutaFoto, decodePixelWidth: 160, _cerrarCts.Token)
+                    .ConfigureAwait(false);
+
+                if (miniatura == null || _estaCerrada || _cerrarCts.IsCancellationRequested || Dispatcher.HasShutdownStarted)
+                {
+                    return;
+                }
+
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (_estaCerrada)
+                    {
+                        return;
+                    }
+
+                    FotoPendiente? existente = AppState.FotosEnEsperaGlobal.FirstOrDefault(f => f.IdFoto == idFoto);
+                    if (existente != null)
+                    {
+                        existente.Miniatura = miniatura;
+                    }
+                });
+            }
+            catch (OperationCanceledException) when (_cerrarCts.IsCancellationRequested || _estaCerrada)
+            {
+                // Ventana cerrándose
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[MainWindow] Error al procesar recepción de foto '{idFoto}': {ex.Message}");
+            }
+        }
+
+        // 2. Sincroniza en UI la asignación ya validada y persistida por WebServer + RaceDataService
+        private void WebServer_FotoAsignadaRemota(string idFoto, int dorsalNum, AsignacionResultado resultado)
+        {
+            if (_estaCerrada || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (_estaCerrada)
+                {
+                    return;
+                }
+
+                FotoPendiente? fotoActual = AppState.FotosEnEsperaGlobal.FirstOrDefault(f => f.IdFoto == idFoto);
                 if (fotoActual != null)
                 {
-                    if (System.IO.File.Exists(fotoActual.Ruta_Foto))
-                    {
-                        try { System.IO.File.Delete(fotoActual.Ruta_Foto); } catch { }
-                    }
-                    
-                    Server.WebServer.EliminarFotoPendiente(fotoActual.IdFoto);
+                    fotoActual.Miniatura = null;
+                    AppState.FotosEnEsperaGlobal.Remove(fotoActual);
+                }
+
+                AppState.AgregarRegistroExitoso($"[{DateTime.Now:HH:mm:ss}] Remoto: {resultado.Mensaje}");
+                if (resultado.HitFinalizado)
+                {
+                    AppState.AgregarRegistroExitoso(
+                        $"[HIT FINALIZADO] ¡Todos los corredores de '{resultado.NombreHitFinalizado}' han llegado a la meta!");
+                }
+
+                AppState.NotificarNuevoTiempo();
+            });
+        }
+
+        private void WebServer_FotoDescartadaRemota(string idFoto)
+        {
+            if (_estaCerrada || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (_estaCerrada)
+                {
+                    return;
+                }
+
+                FotoPendiente? fotoActual = AppState.FotosEnEsperaGlobal.FirstOrDefault(f => f.IdFoto == idFoto);
+                if (fotoActual != null)
+                {
+                    fotoActual.Miniatura = null;
                     AppState.FotosEnEsperaGlobal.Remove(fotoActual);
                 }
             });
+        }
+
+        private void WebServer_ErrorCriticoServidor(Exception ex)
+        {
+            if (_estaCerrada || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                if (_estaCerrada)
+                {
+                    return;
+                }
+
+                AppState.AgregarRegistroExitoso($"[SERVIDOR WEB] Error crítico: {ex.Message}");
+                MessageBox.Show(
+                    $"No se pudo iniciar o mantener activo el servidor web local (puertos 5000/5001).\nVerifica que los puertos estén disponibles.\n\nDetalle: {ex.Message}",
+                    "Error del Servidor Web",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            });
+        }
+
+        private void BtnHamburguesa_Click(object sender, RoutedEventArgs e)
+        {
+            PanelLateral.Visibility = PanelLateral.Visibility == Visibility.Visible
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
+        private void NavInicio_Click(object sender, RoutedEventArgs e)
+        {
+            if (ContenedorPrincipal.Content is WelcomeView)
+            {
+                PanelLateral.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            NavegarAVista(new WelcomeView());
+        }
+
+        private void NavCronometraje_Click(object sender, RoutedEventArgs e)
+        {
+            if (ContenedorPrincipal.Content is TimingView)
+            {
+                PanelLateral.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            NavegarAVista(new TimingView());
+        }
+
+        private void NavCorredores_Click(object sender, RoutedEventArgs e)
+        {
+            if (AppState.CarreraActiva == null)
+            {
+                MessageBox.Show("Por favor, selecciona o crea una carrera en el Inicio primero.", "Atención", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            NavegarAVista(new CorredoresView());
+        }
+
+        private void NavHits_Click(object sender, RoutedEventArgs e)
+        {
+            if (AppState.CarreraActiva == null)
+            {
+                MessageBox.Show("Por favor, selecciona o crea una carrera en el Inicio primero.", "Atención", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            NavegarAVista(new HitsView());
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _estaCerrada = true;
+
+            try
+            {
+                _cerrarCts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignorar si ya fue liberado
+            }
+
+            WebServer.NuevaFotoRecibida -= WebServer_NuevaFotoRecibida;
+            WebServer.FotoAsignadaRemota -= WebServer_FotoAsignadaRemota;
+            WebServer.FotoDescartadaRemota -= WebServer_FotoDescartadaRemota;
+            WebServer.ErrorCriticoServidor -= WebServer_ErrorCriticoServidor;
+            AppState.CarreraActivaCambiada -= AppState_CarreraActivaCambiada;
+
+            CerrarPizarra();
+            _cerrarCts.Dispose();
+
+            base.OnClosed(e);
         }
     }
 }

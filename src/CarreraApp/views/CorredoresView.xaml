@@ -26,9 +26,21 @@
                     <ComboBox Name="ComboCategoria" DisplayMemberPath="Nombre" SelectedValuePath="ID_Categoria" Margin="0,0,0,10" Padding="5"/>
                     
                     <TextBlock Text="Hit de Salida:" FontWeight="SemiBold"/>
-                    <ComboBox Name="ComboHit" DisplayMemberPath="Nombre_Hit" SelectedValuePath="ID_Hit" Margin="0,0,0,15" Padding="5"/>
+                    <ComboBox Name="ComboHit" DisplayMemberPath="Nombre_Hit" SelectedValuePath="ID_Hit" Margin="0,0,0,10" Padding="5"/>
+
+                    <TextBlock Text="Estado:" FontWeight="SemiBold"/>
+                    <ComboBox Name="ComboEstado" Margin="0,0,0,10" Padding="5"/>
+
+                    <TextBlock Name="TxtAvisoBloqueoTiempo"
+                               Text="Este corredor ya registró tiempo: no es posible cambiar su Hit ni pasar su estado a DNS/DNF."
+                               Foreground="#B45309"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10"
+                               Visibility="Collapsed"/>
 
                     <Button Name="BtnAccionCorredor" Content="REGISTRAR CORREDOR" Click="BtnGuardarCorredor_Click" Background="#28A745" Foreground="White" FontWeight="Bold" Padding="10" BorderThickness="0" Cursor="Hand"/>
+                    <Button Name="BtnCancelarEdicion" Content="CANCELAR EDICIÓN" Click="BtnCancelarEdicion_Click" Background="#6C757D" Foreground="White" FontWeight="Bold" Padding="8" Margin="0,8,0,0" BorderThickness="0" Cursor="Hand" Visibility="Collapsed"/>
                 </StackPanel>
             </Border>
         </StackPanel>
@@ -72,7 +84,18 @@
                             </DataGridTextColumn.ElementStyle>
                         </DataGridTextColumn>
 
-                        <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="80"/>
+                        <DataGridTemplateColumn Header="Estado" Width="105">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ComboBox ItemsSource="{Binding EstadosDisponibles}"
+                                              SelectedItem="{Binding Estado, Mode=OneWay}"
+                                              IsEnabled="{Binding PuedeModificarEstadoYHit}"
+                                              SelectionChanged="ComboEstadoFila_SelectionChanged"
+                                              Padding="4,2"
+                                              Margin="2"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
                         <!-- Columna de Acciones -->
                         <DataGridTemplateColumn Header="Acciones" Width="80">
