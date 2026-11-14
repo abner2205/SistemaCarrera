@@ -16,10 +16,17 @@ publish/
 *.db-wal
 *.db-shm
 
-## Fotos temporales en cola (para no sobrecargar el repositorio)
+## Fotos temporales, definitivas y respaldos locales (para no sobrecargar el repositorio)
 Storage/Fotos_Temp/*
 **/Storage/Fotos_Temp/*
 !**/Storage/Fotos_Temp/.gitkeep
+Storage/Fotos_Definitivas/*
+**/Storage/Fotos_Definitivas/*
+!**/Storage/Fotos_Definitivas/.gitkeep
+Storage/Backups/*
+**/Storage/Backups/*
+!**/Storage/Backups/.gitkeep
+*.db
 
 ## Archivos de registro y temporales
 *.log

@@ -7,7 +7,7 @@ Este documento almacena el estado persistente, decisiones técnicas y el histori
 ## 1. Estado Actual del Sistema
 
 - **Versión / Target**: .NET 10.0 (WPF / SQLite EF Core / ASP.NET Core embebido)
-- **Estado de Compilación y Pruebas**: `dotnet build SistemaCarrera.slnx` limpio (`0 Advertencia(s), 0 Errores`); suite `CarreraApp.Tests` pasando al 100% (`202/202` pruebas en verde, `0` omitidas).
+- **Estado de Compilación y Pruebas**: `dotnet build SistemaCarrera.slnx` limpio (`0 Advertencia(s), 0 Errores`); suite `CarreraApp.Tests` pasando al 100% (`248/248` pruebas en verde, `0` omitidas).
 - **Base de Datos**: `carrera.db` (SQLite en modo `WAL`, `foreign_keys = ON`, `busy_timeout = 5000`) con tablas principales `Carreras`, `Categorias`, `Hits`, `Corredores`, `Tiempos` y respaldos consistentes vía `DatabaseMaintenanceHelper`.
 - **Servidor Web**: `WebServer` (Kestrel embebido HTTP/HTTPS) con autenticación por token de sesión (`X-Auth-Token` / `token` para QR), validación estricta de imágenes/dorsales, exclusividad mutua de fotos pendientes y vista móvil/pública en `wwwroot/`.
 
@@ -31,6 +31,7 @@ Este documento almacena el estado persistente, decisiones técnicas y el histori
 | ID | Nombre | Estado | Resumen |
 | :--- | :--- | :--- | :--- |
 | `001` | `001-seguridad-eficiencia` | Completada | Seguridad LAN/archivo/CSV, atomicidad de tiempos/hits, reglas `DNS`/`DNF`, optimización de arranque/UI/memoria y suite completa de pruebas unitarias, integración y carga (`202/202` en verde). Validada RF-01 a RF-31 (`VEREDICTO: APROBADO`). |
+| `002` | `002-feedback-visual-frontend` | Completada | Paleta WCAG AA 100% offline, dígitos tabulares, estados interactivos, toast/validación en línea sin `MessageBox` rutinarios, cliente móvil `320–360 px` con disparo instantáneo, pizarra `#0B0E14` y `248/248` pruebas en verde. Validada RF-01 a RF-17 (`VEREDICTO: APROBADO`). |
 
 ---
 

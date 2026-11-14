@@ -1,99 +1,406 @@
 <UserControl x:Class="CarreraApp.UI.Views.HitsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="#F4F6F9" FontFamily="Segoe UI">
+             Background="{DynamicResource ChalkSurfaceBrush}"
+             FontFamily="{DynamicResource UiFontFamily}">
     <Grid Margin="20">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="350"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <!-- Columna Izquierda: Formularios -->
-        <StackPanel Grid.Column="0" Margin="0,0,20,0">
-            
-            <!-- Formulario Crear Hit -->
-            <Border Background="White" CornerRadius="8" Padding="20" Margin="0,0,0,20">
-                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
+        <!-- Banner de feedback en línea (respaldo cuando la vista se usa sin MainWindow) -->
+        <Border x:Name="BannerFeedbackHits"
+                Grid.Row="0"
+                Visibility="Collapsed"
+                CornerRadius="6"
+                BorderThickness="1.5"
+                Padding="14,10"
+                Margin="0,0,0,14">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="BtnCerrarBannerHits"
+                        DockPanel.Dock="Right"
+                        Content="✕"
+                        Click="BtnCerrarBannerHits_Click"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        MinHeight="24"
+                        Padding="8,2"
+                        Margin="10,0,0,0"
+                        VerticalAlignment="Center"
+                        ToolTip="Cerrar aviso"/>
+                <TextBlock x:Name="TxtBannerFeedbackHits"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Columna Izquierda: Formularios -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,20,0">
                 <StackPanel>
-                    <TextBlock Text="Nuevo Hit de Salida" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
-                    <TextBlock Text="Nombre del Hit (Ej: Hit 1):" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                    <TextBox Name="InputNombreHit" Padding="8" FontSize="16" Margin="0,0,0,15"/>
-                    <Button Name="BtnAccionHit" Content="GUARDAR HIT" Click="BtnGuardarHit_Click" Background="#0078D7" Foreground="White" FontWeight="Bold" Padding="10" BorderThickness="0" Cursor="Hand"/>
+                    <!-- Formulario Crear / Editar Hit -->
+                    <Border Background="{DynamicResource PureWhiteBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="20"
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock x:Name="TxtTituloFormularioHit"
+                                       Text="Nuevo Hit de salida"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="18"
+                                       Margin="0,0,0,12"/>
+
+                            <TextBlock Text="Nombre del Hit (ej. Hit 1)"
+                                       Style="{DynamicResource FieldLabelTextStyle}"/>
+                            <TextBox x:Name="InputNombreHit"
+                                     FontSize="15"
+                                     TextChanged="InputNombreHit_TextChanged"
+                                     KeyDown="InputNombreHit_KeyDown"
+                                     Margin="0,0,0,4"/>
+                            <TextBlock x:Name="TxtErrorNombreHit"
+                                       Style="{DynamicResource InlineErrorTextStyle}"
+                                       Visibility="Collapsed"
+                                       Margin="0,0,0,10"/>
+
+                            <ProgressBar x:Name="ProgresoHit"
+                                         IsIndeterminate="True"
+                                         Height="4"
+                                         Foreground="{DynamicResource SignalCobaltBrush}"
+                                         Visibility="Collapsed"
+                                         Margin="0,6,0,8"/>
+
+                            <Button x:Name="BtnAccionHit"
+                                    Content="Guardar Hit"
+                                    Style="{DynamicResource PrimaryButtonStyle}"
+                                    Click="BtnGuardarHit_Click"
+                                    Margin="0,8,0,0"/>
+                            <Button x:Name="BtnCancelarEdicionHit"
+                                    Content="Cancelar edición"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Click="BtnCancelarEdicionHit_Click"
+                                    Margin="0,8,0,0"
+                                    Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Formulario Crear / Editar Categoría -->
+                    <Border Background="{DynamicResource PureWhiteBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="20">
+                        <StackPanel>
+                            <TextBlock x:Name="TxtTituloFormularioCategoria"
+                                       Text="Nueva categoría"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="18"
+                                       Margin="0,0,0,12"/>
+
+                            <TextBlock Text="Nombre de categoría (ej. Libre Masculino)"
+                                       Style="{DynamicResource FieldLabelTextStyle}"/>
+                            <TextBox x:Name="InputNombreCategoria"
+                                     FontSize="15"
+                                     TextChanged="InputNombreCategoria_TextChanged"
+                                     KeyDown="InputNombreCategoria_KeyDown"
+                                     Margin="0,0,0,4"/>
+                            <TextBlock x:Name="TxtErrorNombreCategoria"
+                                       Style="{DynamicResource InlineErrorTextStyle}"
+                                       Visibility="Collapsed"
+                                       Margin="0,0,0,10"/>
+
+                            <ProgressBar x:Name="ProgresoCategoria"
+                                         IsIndeterminate="True"
+                                         Height="4"
+                                         Foreground="{DynamicResource FinishEmeraldBrush}"
+                                         Visibility="Collapsed"
+                                         Margin="0,6,0,8"/>
+
+                            <Button x:Name="BtnAccionCategoria"
+                                    Content="Guardar categoría"
+                                    Style="{DynamicResource SuccessButtonStyle}"
+                                    Click="BtnGuardarCategoria_Click"
+                                    Margin="0,8,0,0"/>
+                            <Button x:Name="BtnCancelarEdicionCategoria"
+                                    Content="Cancelar edición"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    Click="BtnCancelarEdicionCategoria_Click"
+                                    Margin="0,8,0,0"
+                                    Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
+            </ScrollViewer>
 
-            <!-- Formulario Crear Categoría -->
-            <Border Background="White" CornerRadius="8" Padding="20">
-                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
-                <StackPanel>
-                    <TextBlock Text="Nueva Categoría" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
-                    <TextBlock Text="Nombre (Ej: Libre Masculino):" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                    <TextBox Name="InputNombreCategoria" Padding="8" FontSize="16" Margin="0,0,0,15"/>
-                    <Button Name="BtnAccionCategoria" Content="GUARDAR CATEGORÍA" Click="BtnGuardarCategoria_Click" Background="#17A2B8" Foreground="White" FontWeight="Bold" Padding="10" BorderThickness="0" Cursor="Hand"/>
-                </StackPanel>
-            </Border>
-            
-        </StackPanel>
+            <!-- Columna Derecha: Listas de Registros -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="20"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-        <!-- Columna Derecha: Listas de Registros -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="20"/> <!-- Espaciador -->
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+                <!-- Lista de Hits -->
+                <Border Grid.Row="0"
+                        Background="{DynamicResource PureWhiteBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="20">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="Hits registrados"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="18"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtContadorHits"
+                                       DockPanel.Dock="Right"
+                                       Text="0 Hits"
+                                       Style="{DynamicResource TabularTextStyle}"
+                                       Foreground="{DynamicResource SlateMutedBrush}"
+                                       FontSize="12"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
 
-            <!-- Lista de Hits -->
-            <Border Grid.Row="0" Background="White" CornerRadius="8" Padding="20">
-                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Hits Registrados" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
-                    <DataGrid Name="TablaHits" AutoGenerateColumns="False" IsReadOnly="True" Background="Transparent" RowHeaderWidth="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="ID" Binding="{Binding ID_Hit}" Width="40"/>
-                            <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre_Hit}" Width="*"/>
-                            <DataGridTextColumn Header="Hora Inicio" Binding="{Binding Hora_Inicio, StringFormat={}{0:HH:mm:ss}}" Width="100"/>
-                            <DataGridTextColumn Header="Hora Fin" Binding="{Binding Hora_Fin, StringFormat={}{0:HH:mm:ss}}" Width="100"/>
-                            <!-- Nueva columna de Acciones -->
-                            <DataGridTemplateColumn Header="Acciones" Width="80">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Button Content="Ed" Click="BtnEditarHit_Click" Background="#FFC107" FontWeight="Bold" BorderThickness="0" Margin="0,0,5,0" Padding="5,2" Cursor="Hand"/>
-                                            <Button Content="X" Click="BtnEliminarHit_Click" Background="#DC3545" Foreground="White" FontWeight="Bold" BorderThickness="0" Padding="5,2" Cursor="Hand"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
-            </Border>
+                        <Grid>
+                            <DataGrid x:Name="TablaHits"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      Background="{DynamicResource PureWhiteBrush}"
+                                      BorderBrush="{DynamicResource CardBorderBrush}"
+                                      BorderThickness="1"
+                                      GridLinesVisibility="Horizontal"
+                                      HorizontalGridLinesBrush="{DynamicResource SurfaceSubtleBrush}"
+                                      RowHeaderWidth="0"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      SelectionMode="Single">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="ID" Binding="{Binding ID_Hit}" Width="55">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}"/>
+                                                <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource SlateMutedBrush}"/>
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
 
-            <!-- Lista de Categorías -->
-            <Border Grid.Row="2" Background="White" CornerRadius="8" Padding="20">
-                <Border.Effect><DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/></Border.Effect>
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Categorías Registradas" FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
-                    <DataGrid Name="TablaCategorias" AutoGenerateColumns="False" IsReadOnly="True" Background="Transparent" RowHeaderWidth="0">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="ID" Binding="{Binding ID_Categoria}" Width="40"/>
-                            <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*"/>
-                            <!-- Nueva columna de Acciones -->
-                            <DataGridTemplateColumn Header="Acciones" Width="80">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <Button Content="Ed" Click="BtnEditarCategoria_Click" Background="#FFC107" FontWeight="Bold" BorderThickness="0" Margin="0,0,5,0" Padding="5,2" Cursor="Hand"/>
-                                            <Button Content="X" Click="BtnEliminarCategoria_Click" Background="#DC3545" Foreground="White" FontWeight="Bold" BorderThickness="0" Padding="5,2" Cursor="Hand"/>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
-            </Border>
+                                    <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre_Hit}" Width="*">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TrackInkBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <DataGridTextColumn Header="Hora inicio" Binding="{Binding Hora_Inicio, StringFormat={}{0:HH:mm:ss}}" Width="105">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}"/>
+                                                <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource TrackInkBrush}"/>
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <DataGridTextColumn Header="Hora fin" Binding="{Binding Hora_Fin, StringFormat={}{0:HH:mm:ss}}" Width="105">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}"/>
+                                                <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource TrackInkBrush}"/>
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <DataGridTemplateColumn Header="Acciones" Width="150">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Button Content="Editar"
+                                                            Style="{DynamicResource SecondaryButtonStyle}"
+                                                            Click="BtnEditarHit_Click"
+                                                            MinHeight="28"
+                                                            Padding="10,4"
+                                                            Margin="0,0,6,0"
+                                                            ToolTip="Editar nombre del Hit"/>
+                                                    <Button Content="Eliminar"
+                                                            Style="{DynamicResource DangerButtonStyle}"
+                                                            Click="BtnEliminarHit_Click"
+                                                            MinHeight="28"
+                                                            Padding="10,4"
+                                                            ToolTip="Eliminar Hit"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <Border x:Name="PanelEstadoVacioHits"
+                                    Background="{DynamicResource ChalkSurfaceBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="18"
+                                    Visibility="Collapsed">
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="380">
+                                    <TextBlock Text="Sin Hits de salida"
+                                               Style="{DynamicResource SectionTitleTextStyle}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,0,0,6"/>
+                                    <TextBlock Text="Crea al menos un Hit (por ejemplo, Hit 1) para organizar las salidas de la carrera."
+                                               Style="{DynamicResource MutedLabelTextStyle}"
+                                               FontSize="13"
+                                               TextWrapping="Wrap"
+                                               TextAlignment="Center"
+                                               Margin="0,0,0,12"/>
+                                    <Button x:Name="BtnIrACrearHit"
+                                            Content="Crear primer Hit"
+                                            Style="{DynamicResource PrimaryButtonStyle}"
+                                            Click="BtnIrACrearHit_Click"
+                                            HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+
+                <!-- Lista de Categorías -->
+                <Border Grid.Row="2"
+                        Background="{DynamicResource PureWhiteBrush}"
+                        BorderBrush="{DynamicResource CardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="20">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="Categorías registradas"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="18"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtContadorCategorias"
+                                       DockPanel.Dock="Right"
+                                       Text="0 categorías"
+                                       Style="{DynamicResource TabularTextStyle}"
+                                       Foreground="{DynamicResource SlateMutedBrush}"
+                                       FontSize="12"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+
+                        <Grid>
+                            <DataGrid x:Name="TablaCategorias"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True"
+                                      Background="{DynamicResource PureWhiteBrush}"
+                                      BorderBrush="{DynamicResource CardBorderBrush}"
+                                      BorderThickness="1"
+                                      GridLinesVisibility="Horizontal"
+                                      HorizontalGridLinesBrush="{DynamicResource SurfaceSubtleBrush}"
+                                      RowHeaderWidth="0"
+                                      CanUserAddRows="False"
+                                      CanUserDeleteRows="False"
+                                      SelectionMode="Single">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="ID" Binding="{Binding ID_Categoria}" Width="55">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontFamily" Value="{DynamicResource MonoFontFamily}"/>
+                                                <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource SlateMutedBrush}"/>
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TrackInkBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <DataGridTemplateColumn Header="Acciones" Width="150">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Button Content="Editar"
+                                                            Style="{DynamicResource SecondaryButtonStyle}"
+                                                            Click="BtnEditarCategoria_Click"
+                                                            MinHeight="28"
+                                                            Padding="10,4"
+                                                            Margin="0,0,6,0"
+                                                            ToolTip="Editar nombre de la categoría"/>
+                                                    <Button Content="Eliminar"
+                                                            Style="{DynamicResource DangerButtonStyle}"
+                                                            Click="BtnEliminarCategoria_Click"
+                                                            MinHeight="28"
+                                                            Padding="10,4"
+                                                            ToolTip="Eliminar categoría"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <Border x:Name="PanelEstadoVacioCategorias"
+                                    Background="{DynamicResource ChalkSurfaceBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="18"
+                                    Visibility="Collapsed">
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="380">
+                                    <TextBlock Text="Sin categorías registradas"
+                                               Style="{DynamicResource SectionTitleTextStyle}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,0,0,6"/>
+                                    <TextBlock Text="Agrega al menos una categoría (por ejemplo, Libre Masculino) para clasificar a los corredores."
+                                               Style="{DynamicResource MutedLabelTextStyle}"
+                                               FontSize="13"
+                                               TextWrapping="Wrap"
+                                               TextAlignment="Center"
+                                               Margin="0,0,0,12"/>
+                                    <Button x:Name="BtnIrACrearCategoria"
+                                            Content="Crear primera categoría"
+                                            Style="{DynamicResource SuccessButtonStyle}"
+                                            Click="BtnIrACrearCategoria_Click"
+                                            HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

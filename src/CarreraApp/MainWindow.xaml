@@ -1,42 +1,219 @@
-﻿<Window x:Class="CarreraApp.UI.MainWindow"
+<Window x:Class="CarreraApp.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="CarreraApp - Gestión de Eventos" Height="720" Width="1280"
         WindowStartupLocation="CenterScreen" WindowState="Maximized"
-        Background="#F4F6F9" FontFamily="Segoe UI">
+        Background="{DynamicResource ChalkSurfaceBrush}" FontFamily="Segoe UI">
 
     <Window.Resources>
-        <!-- Estilo para los botones del menú lateral -->
+        <!-- Anillo de foco de alto contraste para superficies oscuras (WCAG AA >= 3:1) -->
+        <Style x:Key="FocusRingClaroStyle" TargetType="Control">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border Margin="-2"
+                                CornerRadius="6"
+                                BorderThickness="2"
+                                BorderBrush="#FFFFFF"
+                                Background="Transparent"
+                                SnapsToDevicePixels="True"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Botón de barra superior oscura -->
+        <Style x:Key="BotonBarraOscuraStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingClaroStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="TopBtnBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Margin="6,6,0,6"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TopBtnBorder" Property="Background" Value="#1E293B"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="TopBtnBorder" Property="Background" Value="#334155"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Estilo para los botones del menú lateral con estado activo contrastado -->
         <Style x:Key="BotonMenuLateral" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#D1D5DB"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="Padding" Value="20,15"/>
+            <Setter Property="Foreground" Value="#E2E8F0"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="14,12"/>
+            <Setter Property="Margin" Value="10,3"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#374151"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingClaroStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="NavBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border x:Name="ActiveIndicator"
+                                        Grid.Column="0"
+                                        Width="4"
+                                        Height="18"
+                                        CornerRadius="2"
+                                        Background="#FFFFFF"
+                                        Margin="0,0,10,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"
+                                                  RecognizesAccessKey="True"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#1E293B"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="#334155"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Active">
+                                <Setter TargetName="NavBorder" Property="Background" Value="{DynamicResource SignalCobaltBrush}"/>
+                                <Setter TargetName="ActiveIndicator" Property="Visibility" Value="Visible"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="Active"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="NavBorder" Property="Background" Value="{DynamicResource SignalCobaltHoverBrush}"/>
+                            </MultiTrigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="Tag" Value="Active"/>
+                                    <Condition Property="IsPressed" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="NavBorder" Property="Background" Value="{DynamicResource SignalCobaltPressedBrush}"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Botón compacto de cierre para toast global -->
+        <Style x:Key="BotonCerrarToastStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingClaroStyle}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="CloseBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CloseBorder" Property="Background" Value="#26000000"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="CloseBorder" Property="Background" Value="#40000000"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="50"/> <!-- Barra Superior -->
+            <RowDefinition Height="52"/> <!-- Barra Superior -->
             <RowDefinition Height="*"/>  <!-- Cuerpo de la App -->
         </Grid.RowDefinitions>
 
         <!-- Barra Superior Oscura -->
-        <Border Grid.Row="0" Background="#111827">
-            <StackPanel Orientation="Horizontal">
-                <!-- Botón de Hamburguesa -->
-                <Button Name="BtnHamburguesa" Content="&#x2261;" Width="60" FontSize="28" Background="Transparent" Foreground="White" BorderThickness="0" Cursor="Hand" Click="BtnHamburguesa_Click"/>
-                <TextBlock Name="TxtNombreCarrera" Text="CARRERA APP" Foreground="White" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,0"/>
-            </StackPanel>
+        <Border Grid.Row="0" Background="{DynamicResource TrackInkBrush}" BorderBrush="#1E293B" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="BtnHamburguesa"
+                            Content="&#x2261;"
+                            Width="52"
+                            Height="40"
+                            FontSize="24"
+                            Style="{StaticResource BotonBarraOscuraStyle}"
+                            ToolTip="Abrir o cerrar menú de navegación"
+                            AutomationProperties.Name="Menú de navegación"
+                            Click="BtnHamburguesa_Click"/>
+                    <TextBlock x:Name="TxtNombreCarrera"
+                               Text="CarreraApp"
+                               Foreground="#FFFFFF"
+                               FontSize="18"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Margin="12,0,16,0"/>
+                </StackPanel>
+
+                <!-- Indicador persistente de sección activa -->
+                <Border Grid.Column="1"
+                        Background="#1E293B"
+                        BorderBrush="#334155"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="12,5"
+                        VerticalAlignment="Center"
+                        Margin="0,0,16,0">
+                    <TextBlock x:Name="TxtSeccionActiva"
+                               Text="Inicio"
+                               Foreground="#F8FAFC"
+                               FontSize="13"
+                               FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
         </Border>
 
         <!-- Cuerpo Principal -->
@@ -47,17 +224,78 @@
             </Grid.ColumnDefinitions>
 
             <!-- Menú Lateral -->
-            <Border Name="PanelLateral" Grid.Column="0" Width="250" Background="#1F2937" Visibility="Collapsed">
-                <StackPanel Margin="0,10,0,0">
-                    <Button Content="Inicio" Style="{StaticResource BotonMenuLateral}" Click="NavInicio_Click"/>
-                    <Button Content="Panel de Cronometraje" Style="{StaticResource BotonMenuLateral}" Click="NavCronometraje_Click"/>
-                    <Button Content="Gestión de Corredores" Style="{StaticResource BotonMenuLateral}" Click="NavCorredores_Click"/>
-                    <Button Content="Configuración de Hits" Style="{StaticResource BotonMenuLateral}" Click="NavHits_Click"/>
+            <Border x:Name="PanelLateral"
+                    Grid.Column="0"
+                    Width="260"
+                    Background="{DynamicResource TrackInkBrush}"
+                    BorderBrush="#1E293B"
+                    BorderThickness="0,0,1,0"
+                    Visibility="Collapsed">
+                <StackPanel Margin="0,12,0,12">
+                    <Button x:Name="BtnNavInicio"
+                            Content="Inicio"
+                            Style="{StaticResource BotonMenuLateral}"
+                            Click="NavInicio_Click"/>
+                    <Button x:Name="BtnNavCronometraje"
+                            Content="Panel de Cronometraje"
+                            Style="{StaticResource BotonMenuLateral}"
+                            Click="NavCronometraje_Click"/>
+                    <Button x:Name="BtnNavCorredores"
+                            Content="Gestión de Corredores"
+                            Style="{StaticResource BotonMenuLateral}"
+                            Click="NavCorredores_Click"/>
+                    <Button x:Name="BtnNavHits"
+                            Content="Configuración de Hits"
+                            Style="{StaticResource BotonMenuLateral}"
+                            Click="NavHits_Click"/>
                 </StackPanel>
             </Border>
 
             <!-- Aquí se inyectarán las diferentes pantallas -->
-            <ContentControl Name="ContenedorPrincipal" Grid.Column="1" Margin="0"/>
+            <ContentControl x:Name="ContenedorPrincipal" Grid.Column="1" Margin="0"/>
+
+            <!-- Toast / Banner Global No Bloqueante -->
+            <Border x:Name="ToastGlobalBorder"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="2"
+                    Panel.ZIndex="100"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,16,20,0"
+                    MinWidth="280"
+                    MaxWidth="460"
+                    CornerRadius="8"
+                    BorderThickness="1.5"
+                    Padding="14,10"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="TxtToastIcono"
+                               Grid.Column="0"
+                               FontSize="14"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+                    <TextBlock x:Name="TxtToastMensaje"
+                               Grid.Column="1"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"/>
+                    <Button x:Name="BtnCerrarToast"
+                            Grid.Column="2"
+                            Content="&#x2715;"
+                            Margin="10,0,0,0"
+                            Style="{StaticResource BotonCerrarToastStyle}"
+                            ToolTip="Cerrar aviso"
+                            AutomationProperties.Name="Cerrar aviso"
+                            Click="BtnCerrarToast_Click"/>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>

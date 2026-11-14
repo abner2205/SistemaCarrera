@@ -2,10 +2,14 @@
 
 const TOKEN_STORAGE_KEY = 'carrera_auth_token';
 const POLL_INTERVAL_MS = 2000;
+const STATUS_BANNER_AUTO_HIDE_MS = 3500;
 
 const video = document.getElementById('camera-feed');
+const cameraFlash = document.getElementById('camera-flash');
 const btnCapture = document.getElementById('btn-capture');
 const pendingQueue = document.getElementById('pending-queue');
+const queueEmptyState = document.getElementById('queue-empty-state');
+const queueCountEl = document.getElementById('queue-count');
 const authBanner = document.getElementById('auth-banner');
 const authMessage = document.getElementById('auth-message');
 const tokenPanel = document.getElementById('token-panel');
@@ -17,14 +21,29 @@ const statusBanner = document.getElementById('status-banner');
 
 let authToken = '';
 let isAuthRejected = false;
+let isNetworkDisconnected = false;
 let tempIdSequence = 0;
 let pollingTimerId = null;
+let statusBannerTimerId = null;
+let flashTimerId = null;
+let captureFeedbackTimerId = null;
 let isPolling = false;
 let pendingImmediatePoll = false;
 
 const uploadingTempIds = new Set();
 const discardedTempIds = new Set();
 const retryBlobs = new Map();
+
+function prefersReducedMotion() {
+    return typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function formatCaptureTime(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
 
 function readStoredToken() {
     try {
@@ -52,16 +71,82 @@ function updateConnectionBadge(text, stateClass) {
     connectionStatus.className = `status-badge ${stateClass}`;
 }
 
+function updateQueueSummary() {
+    if (!pendingQueue) return;
+    const count = pendingQueue.querySelectorAll('.pending-item').length;
+    if (queueCountEl) {
+        queueCountEl.textContent = String(count);
+    }
+    if (queueEmptyState) {
+        queueEmptyState.hidden = count > 0;
+    }
+}
+
+function clearStatusBannerTimer() {
+    if (statusBannerTimerId !== null) {
+        clearTimeout(statusBannerTimerId);
+        statusBannerTimerId = null;
+    }
+}
+
 function showStatusBanner(message, level = 'info') {
     if (!statusBanner) return;
+    clearStatusBannerTimer();
+
     if (!message) {
         statusBanner.hidden = true;
         statusBanner.textContent = '';
         return;
     }
+
     statusBanner.textContent = message;
     statusBanner.className = `status-banner status-${level}`;
     statusBanner.hidden = false;
+
+    if (level === 'success' || level === 'info') {
+        statusBannerTimerId = setTimeout(() => {
+            statusBannerTimerId = null;
+            statusBanner.hidden = true;
+        }, STATUS_BANNER_AUTO_HIDE_MS);
+    }
+}
+
+function triggerCaptureVisualFeedback() {
+    if (!prefersReducedMotion() && cameraFlash) {
+        if (flashTimerId !== null) {
+            clearTimeout(flashTimerId);
+        }
+        cameraFlash.classList.add('is-flashing');
+        flashTimerId = setTimeout(() => {
+            flashTimerId = null;
+            cameraFlash.classList.remove('is-flashing');
+        }, 160);
+    }
+
+    if (btnCapture) {
+        if (captureFeedbackTimerId !== null) {
+            clearTimeout(captureFeedbackTimerId);
+        }
+        btnCapture.classList.add('is-captured');
+        captureFeedbackTimerId = setTimeout(() => {
+            captureFeedbackTimerId = null;
+            btnCapture.classList.remove('is-captured');
+        }, 200);
+    }
+}
+
+function scrollElementIntoViewForKeyboard(element) {
+    if (!element || typeof element.scrollIntoView !== 'function') return;
+    setTimeout(() => {
+        try {
+            element.scrollIntoView({
+                block: 'nearest',
+                behavior: prefersReducedMotion() ? 'auto' : 'smooth'
+            });
+        } catch {
+            element.scrollIntoView(false);
+        }
+    }, 150);
 }
 
 function handleUnauthorized(message) {
@@ -201,6 +286,10 @@ async function apiFetch(url, options = {}) {
 
         if (response.ok) {
             clearAuthError();
+            if (isNetworkDisconnected) {
+                isNetworkDisconnected = false;
+                showStatusBanner('Conexión LAN restablecida con la mesa.', 'info');
+            }
             updateConnectionBadge('Conectado', 'status-ok');
         }
 
@@ -213,12 +302,13 @@ async function apiFetch(url, options = {}) {
             response
         };
     } catch (error) {
+        isNetworkDisconnected = true;
         return {
             ok: false,
             status: 0,
             unauthorized: false,
             networkError: true,
-            data: { mensaje: 'Error de red al conectar con la mesa de cronometraje.' },
+            data: { mensaje: 'Sin conexión LAN con la mesa de cronometraje.' },
             error
         };
     }
@@ -250,7 +340,7 @@ async function initCamera() {
         video.srcObject = stream;
     } catch (error) {
         console.error('Error al acceder a la cámara:', error);
-        showStatusBanner('Por favor, permite el acceso a la cámara en tu navegador para capturar llegadas.', 'error');
+        showStatusBanner('Permite el acceso a la cámara en tu navegador para capturar llegadas.', 'error');
     }
 }
 
@@ -259,6 +349,8 @@ function capturePhotoFrame() {
         showStatusBanner('La cámara aún no está lista.', 'warning');
         return;
     }
+
+    triggerCaptureVisualFeedback();
 
     // Canvas dedicado por cada pulsación para evitar mezcla/sobreescritura de frames en ráfagas rápidas
     const captureCanvas = document.createElement('canvas');
@@ -288,6 +380,12 @@ function capturePhotoFrame() {
     }, 'image/jpeg', 0.85);
 }
 
+function setItemSpinnerVisible(tempId, visible) {
+    const spinnerEl = document.getElementById(`spinner-${tempId}`);
+    if (!spinnerEl) return;
+    spinnerEl.hidden = !visible;
+}
+
 function setItemStatus(tempId, message, isError, isSuccess = false) {
     const statusEl = document.getElementById(`status-${tempId}`);
     if (!statusEl) return;
@@ -310,12 +408,16 @@ function setItemBusy(item, busy) {
 
     if (busy) {
         item.dataset.busy = 'true';
+        item.classList.add('item-busy');
+        setItemSpinnerVisible(tempId, true);
         if (inputDorsal) inputDorsal.disabled = true;
         if (btnOk) btnOk.disabled = true;
         if (btnDiscard) btnDiscard.disabled = true;
         if (btnRetry) btnRetry.disabled = true;
     } else {
         delete item.dataset.busy;
+        item.classList.remove('item-busy');
+        setItemSpinnerVisible(tempId, false);
     }
 }
 
@@ -327,6 +429,8 @@ function restoreItemControls(item) {
     const btnDiscard = document.getElementById(`btn-discard-${tempId}`);
     const btnRetry = document.getElementById(`btn-retry-${tempId}`);
 
+    item.classList.remove('item-busy');
+    setItemSpinnerVisible(tempId, false);
     if (inputDorsal) inputDorsal.disabled = false;
     if (btnOk) btnOk.disabled = !item.dataset.serverId;
     if (btnDiscard) btnDiscard.disabled = false;
@@ -335,7 +439,7 @@ function restoreItemControls(item) {
 
 function addPendingItemToUI(tempId, imageUrl) {
     const div = document.createElement('div');
-    div.className = 'pending-item';
+    div.className = 'pending-item is-entering';
     div.id = `item-${tempId}`;
     div.dataset.tempId = tempId;
     div.dataset.blobUrl = imageUrl;
@@ -343,9 +447,22 @@ function addPendingItemToUI(tempId, imageUrl) {
     const row = document.createElement('div');
     row.className = 'item-main';
 
+    const thumbWrap = document.createElement('div');
+    thumbWrap.className = 'item-thumb-wrap';
+
     const img = document.createElement('img');
     img.src = imageUrl;
-    img.alt = 'Corredor';
+    img.alt = 'Corredor capturado';
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'item-time';
+    timeEl.textContent = formatCaptureTime(new Date());
+
+    thumbWrap.appendChild(img);
+    thumbWrap.appendChild(timeEl);
+
+    const controls = document.createElement('div');
+    controls.className = 'item-controls';
 
     const inputDorsal = document.createElement('input');
     inputDorsal.type = 'number';
@@ -353,7 +470,11 @@ function addPendingItemToUI(tempId, imageUrl) {
     inputDorsal.step = '1';
     inputDorsal.inputMode = 'numeric';
     inputDorsal.placeholder = 'Dorsal';
+    inputDorsal.setAttribute('aria-label', 'Número de dorsal');
     inputDorsal.id = `input-${tempId}`;
+    inputDorsal.addEventListener('focus', () => {
+        scrollElementIntoViewForKeyboard(div);
+    });
     inputDorsal.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -365,7 +486,7 @@ function addPendingItemToUI(tempId, imageUrl) {
     btnOk.type = 'button';
     btnOk.className = 'btn-assign';
     btnOk.id = `btn-assign-${tempId}`;
-    btnOk.textContent = 'OK';
+    btnOk.textContent = 'Asignar';
     btnOk.disabled = true;
     btnOk.addEventListener('click', () => {
         void assignRunner(tempId);
@@ -385,30 +506,50 @@ function addPendingItemToUI(tempId, imageUrl) {
     btnDiscard.type = 'button';
     btnDiscard.className = 'btn-discard';
     btnDiscard.id = `btn-discard-${tempId}`;
-    btnDiscard.textContent = 'X';
+    btnDiscard.textContent = '×';
+    btnDiscard.setAttribute('aria-label', 'Descartar captura');
     btnDiscard.addEventListener('click', () => {
         void discardPhoto(tempId);
     });
 
-    row.appendChild(img);
-    row.appendChild(inputDorsal);
-    row.appendChild(btnOk);
-    row.appendChild(btnRetry);
-    row.appendChild(btnDiscard);
+    controls.appendChild(inputDorsal);
+    controls.appendChild(btnOk);
+    controls.appendChild(btnRetry);
+    controls.appendChild(btnDiscard);
+
+    row.appendChild(thumbWrap);
+    row.appendChild(controls);
+
+    const statusRow = document.createElement('div');
+    statusRow.className = 'item-status-row';
+
+    const spinnerEl = document.createElement('span');
+    spinnerEl.className = 'item-spinner';
+    spinnerEl.id = `spinner-${tempId}`;
+    spinnerEl.setAttribute('aria-hidden', 'true');
 
     const statusEl = document.createElement('div');
     statusEl.className = 'item-status';
     statusEl.id = `status-${tempId}`;
     statusEl.textContent = 'Subiendo foto...';
 
+    statusRow.appendChild(spinnerEl);
+    statusRow.appendChild(statusEl);
+
     div.appendChild(row);
-    div.appendChild(statusEl);
+    div.appendChild(statusRow);
 
     pendingQueue.insertBefore(div, pendingQueue.firstChild);
+    updateQueueSummary();
+
+    setTimeout(() => {
+        div.classList.remove('is-entering');
+    }, 220);
 }
 
 async function sendPhotoToServer(tempId, imageBlob) {
     uploadingTempIds.add(tempId);
+    setItemSpinnerVisible(tempId, true);
 
     const formData = new FormData();
     formData.append('foto', imageBlob, `img_${tempId}.jpg`);
@@ -441,6 +582,7 @@ async function sendPhotoToServer(tempId, imageBlob) {
         const item = document.getElementById(`item-${tempId}`);
         if (!item) return;
 
+        setItemSpinnerVisible(tempId, false);
         const btnOk = document.getElementById(`btn-assign-${tempId}`);
         const btnRetry = document.getElementById(`btn-retry-${tempId}`);
 
@@ -519,14 +661,18 @@ async function assignRunner(tempId) {
     const rawValue = inputDorsal ? inputDorsal.value.trim() : '';
     if (!/^\d+$/.test(rawValue)) {
         setItemStatus(tempId, 'Ingresa un número de dorsal entero positivo.', true);
+        item.classList.add('item-error');
         showStatusBanner('Ingresa un número de dorsal entero positivo.', 'warning');
+        if (inputDorsal) inputDorsal.focus();
         return;
     }
 
     const dorsal = Number.parseInt(rawValue, 10);
     if (!Number.isSafeInteger(dorsal) || dorsal <= 0) {
         setItemStatus(tempId, 'El dorsal debe ser mayor a 0.', true);
+        item.classList.add('item-error');
         showStatusBanner('El dorsal debe ser un número entero positivo.', 'warning');
+        if (inputDorsal) inputDorsal.focus();
         return;
     }
 
@@ -571,6 +717,8 @@ async function assignRunner(tempId) {
         }
     } finally {
         delete item.dataset.busy;
+        item.classList.remove('item-busy');
+        setItemSpinnerVisible(tempId, false);
         if (item.dataset.assigned !== 'true') {
             restoreItemControls(item);
         }
@@ -589,6 +737,7 @@ async function discardPhoto(tempId) {
             discardedTempIds.add(tempId);
         }
         eliminarItemUIRecuperandoMemoria(item, tempId);
+        showStatusBanner('Captura descartada.', 'info');
         return;
     }
 
@@ -604,6 +753,7 @@ async function discardPhoto(tempId) {
 
         if (res.ok || res.status === 404) {
             eliminarItemUIRecuperandoMemoria(item, tempId);
+            showStatusBanner('Captura descartada.', 'info');
             return;
         }
 
@@ -630,17 +780,28 @@ function eliminarItemUIRecuperandoMemoria(item, tempIdOverride) {
         URL.revokeObjectURL(item.dataset.blobUrl);
     }
     item.remove();
+    updateQueueSummary();
 }
 
 function syncPendingQueueWithServer(pendingIds) {
     if (!Array.isArray(pendingIds)) return;
 
+    let removedConcurrently = 0;
     document.querySelectorAll('.pending-item').forEach((item) => {
         const serverId = item.dataset.serverId;
         if (serverId && item.dataset.busy !== 'true' && !pendingIds.includes(serverId)) {
+            if (item.dataset.assigned !== 'true') {
+                removedConcurrently += 1;
+            }
             eliminarItemUIRecuperandoMemoria(item);
         }
     });
+
+    if (removedConcurrently === 1) {
+        showStatusBanner('1 captura fue procesada en otro dispositivo o retirada por cambio de carrera.', 'info');
+    } else if (removedConcurrently > 1) {
+        showStatusBanner(`${removedConcurrently} capturas fueron procesadas en otro dispositivo o retiradas por cambio de carrera.`, 'info');
+    }
 }
 
 function clearPollTimer() {
@@ -685,7 +846,7 @@ async function pollPendingPhotos() {
         if (res.ok) {
             syncPendingQueueWithServer(res.data);
         } else if (res.networkError) {
-            updateConnectionBadge('Sin conexión (reintentando)', 'status-pending');
+            updateConnectionBadge('Sin conexión LAN (reintentando)', 'status-pending');
         }
     } finally {
         isPolling = false;
@@ -700,6 +861,15 @@ async function pollPendingPhotos() {
 
 function cleanupResources() {
     clearPollTimer();
+    clearStatusBannerTimer();
+    if (flashTimerId !== null) {
+        clearTimeout(flashTimerId);
+        flashTimerId = null;
+    }
+    if (captureFeedbackTimerId !== null) {
+        clearTimeout(captureFeedbackTimerId);
+        captureFeedbackTimerId = null;
+    }
     document.querySelectorAll('.pending-item').forEach((item) => {
         if (item.dataset.blobUrl) {
             URL.revokeObjectURL(item.dataset.blobUrl);
@@ -713,6 +883,9 @@ if (btnSaveToken) {
     btnSaveToken.addEventListener('click', saveManualToken);
 }
 if (tokenInput) {
+    tokenInput.addEventListener('focus', () => {
+        scrollElementIntoViewForKeyboard(tokenPanel);
+    });
     tokenInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -735,8 +908,20 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
+window.addEventListener('online', () => {
+    if (authToken && !isAuthRejected) {
+        triggerImmediatePoll();
+    }
+});
+
+window.addEventListener('offline', () => {
+    isNetworkDisconnected = true;
+    updateConnectionBadge('Sin conexión LAN (reintentando)', 'status-pending');
+});
+
 window.addEventListener('pagehide', cleanupResources);
 
+updateQueueSummary();
 initAuthToken();
 void initCamera();
 if (authToken && !isAuthRejected) {

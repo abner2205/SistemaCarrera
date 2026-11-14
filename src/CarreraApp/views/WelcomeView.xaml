@@ -1,90 +1,312 @@
 <UserControl x:Class="CarreraApp.UI.Views.WelcomeView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="#F4F6F9" FontFamily="Segoe UI">
-    
-    <Grid Margin="40">
+             Background="{DynamicResource ChalkSurfaceBrush}"
+             FontFamily="{DynamicResource UiFontFamily}">
+
+    <Grid Margin="28,24">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Gestor de Eventos" FontSize="36" FontWeight="Black" Foreground="#111827" Margin="0,0,0,30"/>
+        <!-- Encabezado -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Gestor de Eventos"
+                       Style="{DynamicResource PageTitleTextStyle}"
+                       FontSize="26"/>
+            <TextBlock Text="Selecciona una carrera existente o crea una nueva para iniciar el cronometraje."
+                       Style="{DynamicResource MutedLabelTextStyle}"
+                       FontSize="13"
+                       Margin="0,4,0,0"
+                       TextWrapping="Wrap"/>
+        </StackPanel>
 
-        <Grid Grid.Row="1">
+        <!-- Banner contextual de feedback en línea (visible en pruebas aisladas o errores de carga) -->
+        <Border x:Name="BannerFeedbackWelcome"
+                Grid.Row="1"
+                Visibility="Collapsed"
+                BorderThickness="1.5"
+                CornerRadius="6"
+                Padding="12,8"
+                Margin="0,0,0,14">
+            <DockPanel LastChildFill="True">
+                <Button x:Name="BtnCerrarBannerWelcome"
+                        DockPanel.Dock="Right"
+                        Content="✕"
+                        Click="BtnCerrarBannerWelcome_Click"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,2"
+                        MinHeight="24"
+                        VerticalAlignment="Center"
+                        ToolTip="Cerrar aviso"/>
+                <TextBlock x:Name="TxtBannerFeedbackWelcome"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Margin="0,0,10,0"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Contenido Principal -->
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*" MinWidth="360"/>
                 <ColumnDefinition Width="400"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Panel Izquierdo: Lista de Carreras -->
-            <Border Grid.Column="0" Background="White" CornerRadius="8" Padding="20" Margin="0,0,20,0">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/>
-                </Border.Effect>
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Carreras Existentes" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
-                    <ListView Name="ListaCarreras" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <!-- Panel Izquierdo: Lista de Carreras y Estado Vacío Accionable -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource PureWhiteBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="20"
+                    Margin="0,0,20,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,14">
+                        <TextBlock DockPanel.Dock="Left"
+                                   Text="Carreras existentes"
+                                   Style="{DynamicResource SectionTitleTextStyle}"
+                                   FontSize="18"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TxtResumenSeleccion"
+                                   DockPanel.Dock="Right"
+                                   Text="Selecciona una carrera de la lista"
+                                   Style="{DynamicResource MutedLabelTextStyle}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="280"/>
+                    </DockPanel>
+
+                    <!-- Lista de carreras -->
+                    <ListView x:Name="ListaCarreras"
+                              Grid.Row="1"
+                              BorderThickness="0"
+                              Background="Transparent"
+                              SelectionMode="Single"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              SelectionChanged="ListaCarreras_SelectionChanged"
+                              MouseDoubleClick="ListaCarreras_MouseDoubleClick"
+                              KeyDown="ListaCarreras_KeyDown">
                         <ListView.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="5" Padding="15" Margin="0,0,0,10" Cursor="Hand" MouseLeftButtonDown="CarreraExistente_Click">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Nombre}" FontSize="18" FontWeight="Bold"/>
-                                        <TextBlock Text="{Binding Fecha, StringFormat={}{0:dd/MM/yyyy}}" Foreground="#666"/>
+                                <Grid Margin="2,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Text="{Binding Nombre}"
+                                                   FontSize="15"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TrackInkBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Fecha, StringFormat={}{0:dd/MM/yyyy}}"
+                                                   Style="{DynamicResource TabularTextStyle}"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource SlateMutedBrush}"
+                                                   Margin="0,2,0,0"/>
                                     </StackPanel>
-                                </Border>
+                                    <TextBlock Grid.Column="1"
+                                               Text="Doble clic o Enter"
+                                               Style="{DynamicResource MutedLabelTextStyle}"
+                                               FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
-                </DockPanel>
+
+                    <!-- Estado vacío accionable -->
+                    <Border x:Name="PanelEstadoVacioCarreras"
+                            Grid.Row="1"
+                            Visibility="Collapsed"
+                            Background="{DynamicResource ChalkSurfaceBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="24"
+                            VerticalAlignment="Center">
+                        <StackPanel HorizontalAlignment="Center" MaxWidth="360">
+                            <TextBlock Text="Aún no hay carreras registradas"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="17"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"/>
+                            <TextBlock Text="Crea tu primera carrera en el formulario de la derecha para configurar categorías, hits y comenzar a cronometrar."
+                                       Style="{DynamicResource MutedLabelTextStyle}"
+                                       FontSize="13"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="0,8,0,16"/>
+                            <Button x:Name="BtnIrACrearCarrera"
+                                    Content="Crear primera carrera"
+                                    Style="{DynamicResource PrimaryButtonStyle}"
+                                    HorizontalAlignment="Center"
+                                    Click="BtnIrACrearCarrera_Click"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Acción inferior para abrir carrera seleccionada -->
+                    <DockPanel Grid.Row="2" Margin="0,14,0,0">
+                        <Button x:Name="BtnAbrirCarrera"
+                                DockPanel.Dock="Right"
+                                Content="Abrir carrera seleccionada"
+                                Style="{DynamicResource PrimaryButtonStyle}"
+                                IsEnabled="False"
+                                Click="BtnAbrirCarrera_Click"/>
+                        <TextBlock x:Name="TxtEstadoCarreraActiva"
+                                   Style="{DynamicResource MutedLabelTextStyle}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,0,12,0"/>
+                    </DockPanel>
+                </Grid>
             </Border>
 
-            <!-- Panel Derecho: Crear Nueva y Acceso QR (Ahora con Scroll) -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" BorderThickness="0" Padding="0,0,10,0">
+            <!-- Panel Derecho: Crear Nueva y Acceso QR -->
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" BorderThickness="0" Padding="0,0,4,0">
                 <StackPanel>
-                    
                     <!-- 1. Formulario de Creación -->
-                    <Border Background="White" CornerRadius="8" Padding="20" Margin="0,0,0,20">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/>
-                        </Border.Effect>
+                    <Border Background="{DynamicResource PureWhiteBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="20"
+                            Margin="0,0,0,16">
                         <StackPanel>
-                            <TextBlock Text="Crear Nueva Carrera" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
-                            
-                            <TextBlock Text="Nombre del Evento:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                            <TextBox Name="InputNombreCarrera" Padding="10" FontSize="16" Margin="0,0,0,15" Background="#F9FAFB"/>
+                            <TextBlock Text="Crear nueva carrera"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="18"
+                                       Margin="0,0,0,14"/>
 
-                            <TextBlock Text="Fecha:" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                            <DatePicker Name="InputFechaCarrera" Padding="5" FontSize="16" Margin="0,0,0,25"/>
+                            <TextBlock Text="Nombre del evento"
+                                       Style="{DynamicResource FieldLabelTextStyle}"/>
+                            <TextBox x:Name="InputNombreCarrera"
+                                     Padding="10,8"
+                                     FontSize="14"
+                                     TextChanged="InputNombreCarrera_TextChanged"
+                                     KeyDown="InputNombreCarrera_KeyDown"/>
+                            <TextBlock x:Name="TxtErrorNombreCarrera"
+                                       Style="{DynamicResource InlineErrorTextStyle}"
+                                       Visibility="Collapsed"
+                                       Margin="0,4,0,0"/>
 
-                            <Button Name="BtnCrearCarrera" Content="CREAR Y GESTIONAR" Click="BtnCrearCarrera_Click" Background="#28A745" Foreground="White" FontWeight="Bold" FontSize="16" Padding="15" BorderThickness="0" Cursor="Hand"/>
+                            <TextBlock Text="Fecha del evento"
+                                       Style="{DynamicResource FieldLabelTextStyle}"
+                                       Margin="0,12,0,4"/>
+                            <DatePicker x:Name="InputFechaCarrera"
+                                        Padding="6,4"
+                                        FontSize="14"
+                                        SelectedDateChanged="InputFechaCarrera_SelectedDateChanged"/>
+                            <TextBlock x:Name="TxtErrorFechaCarrera"
+                                       Style="{DynamicResource InlineErrorTextStyle}"
+                                       Visibility="Collapsed"
+                                       Margin="0,4,0,0"/>
+
+                            <Button x:Name="BtnCrearCarrera"
+                                    Content="Crear y abrir carrera"
+                                    Style="{DynamicResource SuccessButtonStyle}"
+                                    FontSize="14"
+                                    Padding="16,10"
+                                    Margin="0,18,0,0"
+                                    Click="BtnCrearCarrera_Click"/>
                         </StackPanel>
                     </Border>
 
                     <!-- 2. Panel del Código QR -->
-                    <Border Background="White" CornerRadius="8" Padding="20" Margin="0,0,0,10">
-                        <Border.Effect>
-                            <DropShadowEffect BlurRadius="5" Color="#D1D5DB" ShadowDepth="1" Opacity="0.5"/>
-                        </Border.Effect>
+                    <Border Background="{DynamicResource PureWhiteBrush}"
+                            BorderBrush="{DynamicResource CardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="20">
                         <StackPanel HorizontalAlignment="Stretch">
-                            <TextBlock Text="Acceso para Jueces" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,5"/>
-                            <TextBlock Text="Escanee con el teléfono para conectar la cámara" FontSize="14" Foreground="#666" HorizontalAlignment="Center" Margin="0,0,0,15" TextWrapping="Wrap" TextAlignment="Center"/>
-                            
-                            <Border BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="5" Padding="5" HorizontalAlignment="Center">
-                                <Image Name="QrImage" Width="150" Height="150" Stretch="Uniform"/>
-                            </Border>
-                            
-                            <TextBlock Name="TxtUrlServer" FontSize="13" FontWeight="Bold" Foreground="#0078D7" TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Stretch" Margin="0,12,0,8"/>
+                            <TextBlock Text="Acceso para jueces"
+                                       Style="{DynamicResource SectionTitleTextStyle}"
+                                       FontSize="17"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="Escanea con el teléfono para conectar la cámara de meta"
+                                       Style="{DynamicResource MutedLabelTextStyle}"
+                                       FontSize="13"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,14"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"/>
 
-                            <Border Background="#F3F4F6" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,4,0,0">
+                            <Border BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="6"
+                                    Background="{DynamicResource PureWhiteBrush}"
+                                    HorizontalAlignment="Center">
+                                <Image x:Name="QrImage" Width="150" Height="150" Stretch="Uniform"/>
+                            </Border>
+
+                            <TextBlock x:Name="TxtUrlServer"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SignalCobaltBrush}"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Stretch"
+                                       Margin="0,12,0,8"/>
+
+                            <Button x:Name="BtnCopiarUrl"
+                                    Content="Copiar enlace"
+                                    Style="{DynamicResource SecondaryButtonStyle}"
+                                    HorizontalAlignment="Center"
+                                    Padding="12,5"
+                                    MinHeight="28"
+                                    FontSize="12"
+                                    Margin="0,0,0,10"
+                                    Click="BtnCopiarUrl_Click"/>
+
+                            <Border Background="{DynamicResource ChalkSurfaceBrush}"
+                                    BorderBrush="{DynamicResource CardBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,8">
                                 <StackPanel>
-                                    <TextBlock Text="Token de sesión (respaldo manual):" FontSize="12" Foreground="#4B5563" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                    <TextBox Name="TxtTokenSesion" IsReadOnly="True" BorderThickness="0" Background="Transparent" FontFamily="Consolas" FontSize="15" FontWeight="Bold" Foreground="#111827" TextAlignment="Center" HorizontalAlignment="Stretch"/>
+                                    <TextBlock Text="Token de sesión (respaldo manual)"
+                                               Style="{DynamicResource MutedLabelTextStyle}"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="TxtTokenSesion"
+                                                 Grid.Column="0"
+                                                 IsReadOnly="True"
+                                                 Style="{DynamicResource TabularTextBoxStyle}"
+                                                 FontSize="14"
+                                                 FontWeight="Bold"
+                                                 TextAlignment="Center"
+                                                 Margin="0,0,6,0"/>
+                                        <Button x:Name="BtnCopiarToken"
+                                                Grid.Column="1"
+                                                Content="Copiar"
+                                                Style="{DynamicResource SecondaryButtonStyle}"
+                                                Padding="10,5"
+                                                MinHeight="34"
+                                                FontSize="12"
+                                                Click="BtnCopiarToken_Click"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
                     </Border>
-                    
                 </StackPanel>
             </ScrollViewer>
         </Grid>

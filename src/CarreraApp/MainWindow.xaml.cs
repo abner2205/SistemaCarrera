@@ -4,7 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using CarreraApp.Data;
 using CarreraApp.Helpers;
 using CarreraApp.Models;
@@ -17,6 +20,8 @@ namespace CarreraApp.UI
     {
         private readonly CancellationTokenSource _cerrarCts = new();
         private LeaderboardWindow? _ventanaPizarra;
+        private DispatcherTimer? _toastTimer;
+        private int _toastVersion;
         private bool _estaCerrada;
 
         public event Action<bool>? EstadoPizarraCambiado;
@@ -51,7 +56,111 @@ namespace CarreraApp.UI
             }
 
             ContenedorPrincipal.Content = nuevaVista;
+            ActualizarIndicadorNavegacionActiva(nuevaVista);
             PanelLateral.Visibility = Visibility.Collapsed;
+        }
+
+        public void MostrarNotificacionGlobal(
+            NivelFeedback nivel,
+            string mensaje,
+            int? duracionPersonalizadaMs = null)
+        {
+            if (_estaCerrada || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            if (!Dispatcher.CheckAccess())
+            {
+                _ = Dispatcher.InvokeAsync(() => MostrarNotificacionGlobal(nivel, mensaje, duracionPersonalizadaMs));
+                return;
+            }
+
+            ConfiguracionAvisoFeedback config = UiFeedbackHelper.CrearConfiguracionAviso(
+                nivel,
+                mensaje,
+                duracionPersonalizadaMs);
+
+            _toastVersion++;
+            _toastTimer?.Stop();
+
+            Brush fondo = CrearBrushCongelado(config.ColorFondoHex);
+            Brush borde = CrearBrushCongelado(config.ColorBordeHex);
+            Brush texto = CrearBrushCongelado(config.ColorTextoHex);
+
+            ToastGlobalBorder.Background = fondo;
+            ToastGlobalBorder.BorderBrush = borde;
+            TxtToastIcono.Foreground = texto;
+            TxtToastMensaje.Foreground = texto;
+            BtnCerrarToast.Foreground = texto;
+
+            TxtToastIcono.Text = config.Nivel switch
+            {
+                NivelFeedback.Exito => "✓",
+                NivelFeedback.Informacion => "i",
+                NivelFeedback.Advertencia => "!",
+                NivelFeedback.Error => "✕",
+                _ => "i"
+            };
+            TxtToastMensaje.Text = config.Mensaje;
+            ToastGlobalBorder.Visibility = Visibility.Visible;
+
+            int duracionAnimMs = UiFeedbackHelper.ObtenerDuracionTransicionMs();
+            if (duracionAnimMs > 0)
+            {
+                var animacionEntrada = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(duracionAnimMs))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                };
+                ToastGlobalBorder.BeginAnimation(OpacityProperty, animacionEntrada);
+            }
+            else
+            {
+                ToastGlobalBorder.BeginAnimation(OpacityProperty, null);
+                ToastGlobalBorder.Opacity = 1;
+            }
+
+            if (!config.RequiereCierreManual && config.DuracionAutoOcultamientoMs > 0)
+            {
+                _toastTimer ??= CrearToastTimer();
+                _toastTimer.Interval = TimeSpan.FromMilliseconds(config.DuracionAutoOcultamientoMs);
+                _toastTimer.Start();
+            }
+        }
+
+        public void OcultarNotificacionGlobal()
+        {
+            _toastTimer?.Stop();
+            int versionActual = ++_toastVersion;
+
+            if (ToastGlobalBorder.Visibility != Visibility.Visible)
+            {
+                return;
+            }
+
+            int duracionAnimMs = UiFeedbackHelper.ObtenerDuracionTransicionMs();
+            if (duracionAnimMs <= 0 || _estaCerrada)
+            {
+                ToastGlobalBorder.BeginAnimation(OpacityProperty, null);
+                ToastGlobalBorder.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var animacionSalida = new DoubleAnimation(ToastGlobalBorder.Opacity, 0, TimeSpan.FromMilliseconds(duracionAnimMs))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+            };
+            animacionSalida.Completed += (_, _) =>
+            {
+                if (_estaCerrada || versionActual != _toastVersion)
+                {
+                    return;
+                }
+
+                ToastGlobalBorder.BeginAnimation(OpacityProperty, null);
+                ToastGlobalBorder.Visibility = Visibility.Collapsed;
+            };
+            ToastGlobalBorder.BeginAnimation(OpacityProperty, animacionSalida);
         }
 
         public void AlternarPizarra()
@@ -114,14 +223,56 @@ namespace CarreraApp.UI
 
         public void ActualizarTituloCarrera()
         {
-            if (AppState.CarreraActiva != null)
+            TxtNombreCarrera.Text = AppState.CarreraActiva != null
+                ? $"CarreraApp: {AppState.CarreraActiva.Nombre}"
+                : "CarreraApp";
+        }
+
+        private void ActualizarIndicadorNavegacionActiva(UserControl vistaActiva)
+        {
+            BtnNavInicio.Tag = vistaActiva is WelcomeView ? "Active" : null;
+            BtnNavCronometraje.Tag = vistaActiva is TimingView ? "Active" : null;
+            BtnNavCorredores.Tag = vistaActiva is CorredoresView ? "Active" : null;
+            BtnNavHits.Tag = vistaActiva is HitsView ? "Active" : null;
+
+            TxtSeccionActiva.Text = vistaActiva switch
             {
-                TxtNombreCarrera.Text = $"CARRERA APP - {AppState.CarreraActiva.Nombre.ToUpper()}";
-            }
-            else
+                WelcomeView => "Inicio",
+                TimingView => "Panel de Cronometraje",
+                CorredoresView => "Gestión de Corredores",
+                HitsView => "Configuración de Hits",
+                _ => "CarreraApp"
+            };
+        }
+
+        private DispatcherTimer CrearToastTimer()
+        {
+            var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
+            timer.Tick += ToastTimer_Tick;
+            return timer;
+        }
+
+        private void ToastTimer_Tick(object? sender, EventArgs e)
+        {
+            OcultarNotificacionGlobal();
+        }
+
+        private void DetenerYLiberarToastTimer()
+        {
+            if (_toastTimer != null)
             {
-                TxtNombreCarrera.Text = "CARRERA APP";
+                _toastTimer.Stop();
+                _toastTimer.Tick -= ToastTimer_Tick;
+                _toastTimer = null;
             }
+        }
+
+        private static SolidColorBrush CrearBrushCongelado(string hexColor)
+        {
+            var color = (Color)ColorConverter.ConvertFromString(hexColor);
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
         }
 
         private void VentanaPizarra_Closed(object? sender, EventArgs e)
@@ -294,11 +445,9 @@ namespace CarreraApp.UI
                 }
 
                 AppState.AgregarRegistroExitoso($"[SERVIDOR WEB] Error crítico: {ex.Message}");
-                MessageBox.Show(
-                    $"No se pudo iniciar o mantener activo el servidor web local (puertos 5000/5001).\nVerifica que los puertos estén disponibles.\n\nDetalle: {ex.Message}",
-                    "Error del Servidor Web",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                MostrarNotificacionGlobal(
+                    NivelFeedback.Error,
+                    $"No se pudo iniciar el servidor web local (puertos 5000/5001). Verifica que los puertos estén disponibles. Detalle: {ex.Message}");
             });
         }
 
@@ -331,11 +480,19 @@ namespace CarreraApp.UI
             NavegarAVista(new TimingView());
         }
 
+        private void BtnCerrarToast_Click(object sender, RoutedEventArgs e)
+        {
+            OcultarNotificacionGlobal();
+        }
+
         private void NavCorredores_Click(object sender, RoutedEventArgs e)
         {
             if (AppState.CarreraActiva == null)
             {
-                MessageBox.Show("Por favor, selecciona o crea una carrera en el Inicio primero.", "Atención", MessageBoxButton.OK, MessageBoxImage.Warning);
+                PanelLateral.Visibility = Visibility.Collapsed;
+                MostrarNotificacionGlobal(
+                    NivelFeedback.Advertencia,
+                    "Selecciona o crea una carrera en Inicio antes de abrir Gestión de Corredores.");
                 return;
             }
 
@@ -346,7 +503,10 @@ namespace CarreraApp.UI
         {
             if (AppState.CarreraActiva == null)
             {
-                MessageBox.Show("Por favor, selecciona o crea una carrera en el Inicio primero.", "Atención", MessageBoxButton.OK, MessageBoxImage.Warning);
+                PanelLateral.Visibility = Visibility.Collapsed;
+                MostrarNotificacionGlobal(
+                    NivelFeedback.Advertencia,
+                    "Selecciona o crea una carrera en Inicio antes de abrir Configuración de Hits.");
                 return;
             }
 
@@ -356,6 +516,9 @@ namespace CarreraApp.UI
         protected override void OnClosed(EventArgs e)
         {
             _estaCerrada = true;
+            _toastVersion++;
+            DetenerYLiberarToastTimer();
+            ToastGlobalBorder.BeginAnimation(OpacityProperty, null);
 
             try
             {

@@ -221,20 +221,20 @@ namespace CarreraApp.UI
 
     public class ResultadoView
     {
-        private static readonly SolidColorBrush BordeOro = CrearPincelCongelado("#FFC700");
-        private static readonly SolidColorBrush BordePlata = CrearPincelCongelado("#B0B7BD");
-        private static readonly SolidColorBrush BordeBronce = CrearPincelCongelado("#CD7F32");
-        private static readonly SolidColorBrush BordeDefault = CrearPincelCongelado("#333333");
+        private static readonly SolidColorBrush BordeOro = CrearPincelCongelado("#FACC15");
+        private static readonly SolidColorBrush BordePlata = CrearPincelCongelado("#E2E8F0");
+        private static readonly SolidColorBrush BordeBronce = CrearPincelCongelado("#FDBA74");
+        private static readonly SolidColorBrush BordeDefault = CrearPincelCongelado("#334155");
 
-        private static readonly SolidColorBrush FondoOro = CrearPincelCongelado("#1A1707");
-        private static readonly SolidColorBrush FondoPlata = CrearPincelCongelado("#14171A");
-        private static readonly SolidColorBrush FondoBronce = CrearPincelCongelado("#1A1108");
-        private static readonly SolidColorBrush FondoDefault = CrearPincelCongelado("#121216");
+        private static readonly SolidColorBrush FondoOro = CrearPincelCongelado("#17150B");
+        private static readonly SolidColorBrush FondoPlata = CrearPincelCongelado("#131822");
+        private static readonly SolidColorBrush FondoBronce = CrearPincelCongelado("#1A130D");
+        private static readonly SolidColorBrush FondoDefault = CrearPincelCongelado("#111827");
 
         private static readonly SolidColorBrush TextoOro = BordeOro;
-        private static readonly SolidColorBrush TextoPlata = CrearPincelCongelado("#D0D4D9");
+        private static readonly SolidColorBrush TextoPlata = BordePlata;
         private static readonly SolidColorBrush TextoBronce = BordeBronce;
-        private static readonly SolidColorBrush TextoDefault = CrearPincelCongelado("#888888");
+        private static readonly SolidColorBrush TextoDefault = CrearPincelCongelado("#CBD5E1");
 
         public int Posicion { get; set; }
         public int Dorsal { get; set; }
@@ -243,6 +243,7 @@ namespace CarreraApp.UI
         public string TiempoFormateado => $"{(int)TiempoNeto.TotalHours:00}:{TiempoNeto.Minutes:00}:{TiempoNeto.Seconds:00}";
 
         public string IconoPuesto => $"{Posicion}°";
+        public string DorsalFormateado => $"#{Dorsal}";
 
         // Estilos con pinceles congelados para el Podio (1°, 2° y 3°)
         public Brush ColorBordePodio => Posicion switch
@@ -311,6 +312,9 @@ namespace CarreraApp.UI
 
     public partial class LeaderboardWindow : Window
     {
+        private static readonly SolidColorBrush FondoPizarraRespaldo = CrearPincelCongelado("#0B0E14");
+        private static readonly SolidColorBrush TextoPizarraRespaldo = CrearPincelCongelado("#F8FAFC");
+
         private readonly Func<ApplicationDbContext> _contextFactory;
         private readonly ReloadVersionCoordinator _reloadCoordinator = new();
         private readonly LogoRouteCache _logoCache = new();
@@ -325,11 +329,27 @@ namespace CarreraApp.UI
             _contextFactory = contextFactory ?? (() => new ApplicationDbContext());
             InitializeComponent();
 
+            if (Background == null)
+            {
+                Background = FondoPizarraRespaldo;
+            }
+            if (Foreground == null)
+            {
+                Foreground = TextoPizarraRespaldo;
+            }
+
             AppState.NuevoTiempoRegistrado += OnEventoPizarra;
             AppState.CategoriaPizarraCambiada += OnEventoPizarra;
             AppState.CarreraActivaCambiada += OnEventoPizarra;
 
             ActualizarPizarra();
+        }
+
+        private static SolidColorBrush CrearPincelCongelado(string hex)
+        {
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            brush.Freeze();
+            return brush;
         }
 
         private void OnEventoPizarra()
@@ -409,10 +429,14 @@ namespace CarreraApp.UI
                 {
                     await AplicarEnUiSiVigenteAsync(versionSolicitada, ct, () =>
                     {
-                        TxtNombreCarrera.Text = nombreCarrera.ToUpper();
+                        TxtNombreCarrera.Text = nombreCarrera;
                         TxtNombreCategoria.Text = "Sin categorías registradas";
+                        TxtUltimaActualizacion.Text = string.Empty;
                         ListaPodio.ItemsSource = Array.Empty<ResultadoView>();
                         ListaResto.ItemsSource = Array.Empty<ResultadoView>();
+                        TxtEstadoVacioTitulo.Text = "No hay categorías registradas";
+                        TxtEstadoVacioDetalle.Text = "Crea al menos una categoría en la carrera activa para mostrar la clasificación.";
+                        PanelEstadoVacio.Visibility = Visibility.Visible;
                         AplicarLogosEnControles(logoIzq, logoDer);
                     }).ConfigureAwait(false);
                     return;
@@ -455,10 +479,23 @@ namespace CarreraApp.UI
 
                 await AplicarEnUiSiVigenteAsync(versionSolicitada, ct, () =>
                 {
-                    TxtNombreCarrera.Text = nombreCarrera.ToUpper();
+                    TxtNombreCarrera.Text = nombreCarrera;
                     TxtNombreCategoria.Text = $"Resultados: {nombreCategoria}";
+                    TxtUltimaActualizacion.Text = $"Actualizado {DateTime.Now:HH:mm:ss}";
                     ListaPodio.ItemsSource = podio;
                     ListaResto.ItemsSource = resto;
+
+                    if (podio.Count == 0 && resto.Count == 0)
+                    {
+                        TxtEstadoVacioTitulo.Text = "Aún no hay tiempos registrados";
+                        TxtEstadoVacioDetalle.Text = $"Los resultados de {nombreCategoria} aparecerán aquí automáticamente al cruzar la meta.";
+                        PanelEstadoVacio.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        PanelEstadoVacio.Visibility = Visibility.Collapsed;
+                    }
+
                     AplicarLogosEnControles(logoIzq, logoDer);
                 }).ConfigureAwait(false);
             }
@@ -479,10 +516,14 @@ namespace CarreraApp.UI
         {
             await AplicarEnUiSiVigenteAsync(versionSolicitada, ct, () =>
             {
-                TxtNombreCarrera.Text = "SIN CARRERA ACTIVA";
+                TxtNombreCarrera.Text = "Sin carrera activa";
                 TxtNombreCategoria.Text = "Selecciona una carrera";
+                TxtUltimaActualizacion.Text = string.Empty;
                 ListaPodio.ItemsSource = Array.Empty<ResultadoView>();
                 ListaResto.ItemsSource = Array.Empty<ResultadoView>();
+                TxtEstadoVacioTitulo.Text = "Sin carrera activa";
+                TxtEstadoVacioDetalle.Text = "Selecciona una carrera en la ventana principal para proyectar la clasificación oficial.";
+                PanelEstadoVacio.Visibility = Visibility.Visible;
                 AplicarLogosEnControles(null, null);
             }).ConfigureAwait(false);
         }

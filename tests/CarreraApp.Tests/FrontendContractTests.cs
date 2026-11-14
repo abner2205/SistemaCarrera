@@ -10,12 +10,15 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using CarreraApp.Data;
 using CarreraApp.Helpers;
 using CarreraApp.Models;
 using CarreraApp.Server;
+using CarreraApp.UI;
 
 namespace CarreraApp.Tests
 {
@@ -448,6 +451,189 @@ namespace CarreraApp.Tests
                 WebServer.LimpiarColaPendientes();
                 AppState.CambiarCarreraActiva(null);
             }
+        }
+
+        [Fact]
+        public async Task ClienteMovil_EsCienPorCientoOfflineSinCdnsNiFuentesExternas()
+        {
+            using var env = new TestEnvironmentFixture();
+
+            await using var server = await WebServer.IniciarEnSegundoPlanoAsync(new WebServerOptions
+            {
+                DireccionEscucha = IPAddress.Loopback,
+                PuertoHttp = 0,
+                HabilitarHttps = false,
+                RegenerarTokenAlIniciar = true,
+                DbContextFactory = env.CrearFabricaContexto()
+            });
+
+            try
+            {
+                using var client = new HttpClient { BaseAddress = new Uri(WebServer.UrlBaseHttpActivo!) };
+                string html = await client.GetStringAsync("/index.html");
+                string js = await client.GetStringAsync("/app.js");
+                string combinado = html + "\n" + js;
+
+                Assert.DoesNotMatch(@"https?://", combinado);
+                Assert.DoesNotContain("fonts.googleapis", combinado, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("fonts.gstatic", combinado, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("cdn.", combinado, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("jsdelivr", combinado, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("unpkg", combinado, StringComparison.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                WebServer.LimpiarColaPendientes();
+                AppState.CambiarCarreraActiva(null);
+            }
+        }
+
+        [Fact]
+        public async Task ClienteMovil_IncluyeTipografiaTabularMovimientoReducidoYResponsive320A360()
+        {
+            using var env = new TestEnvironmentFixture();
+
+            await using var server = await WebServer.IniciarEnSegundoPlanoAsync(new WebServerOptions
+            {
+                DireccionEscucha = IPAddress.Loopback,
+                PuertoHttp = 0,
+                HabilitarHttps = false,
+                RegenerarTokenAlIniciar = true,
+                DbContextFactory = env.CrearFabricaContexto()
+            });
+
+            try
+            {
+                using var client = new HttpClient { BaseAddress = new Uri(WebServer.UrlBaseHttpActivo!) };
+                string html = await client.GetStringAsync("/index.html");
+                string js = await client.GetStringAsync("/app.js");
+
+                // Tipografía tabular y respaldo monoespaciado local
+                Assert.Contains("tabular-nums", html);
+                Assert.Contains("--font-mono", html);
+
+                // Movimiento reducido en CSS y JS
+                Assert.Matches(@"@media\s*\(\s*prefers-reduced-motion:\s*reduce\s*\)", html);
+                Assert.Contains("prefers-reduced-motion: reduce", js);
+
+                // Responsive 320-360 px y soporte de teclado virtual
+                Assert.Matches(@"@media\s*\(\s*max-width:\s*360px\s*\)", html);
+                Assert.Contains("scrollIntoView", js);
+            }
+            finally
+            {
+                WebServer.LimpiarColaPendientes();
+                AppState.CambiarCarreraActiva(null);
+            }
+        }
+
+        [Fact]
+        public async Task ClienteMovil_ManejaDesconexionLanConcurrenciaYDisparoInstantaneoSinBloquearCaptura()
+        {
+            using var env = new TestEnvironmentFixture();
+
+            await using var server = await WebServer.IniciarEnSegundoPlanoAsync(new WebServerOptions
+            {
+                DireccionEscucha = IPAddress.Loopback,
+                PuertoHttp = 0,
+                HabilitarHttps = false,
+                RegenerarTokenAlIniciar = true,
+                DbContextFactory = env.CrearFabricaContexto()
+            });
+
+            try
+            {
+                using var client = new HttpClient { BaseAddress = new Uri(WebServer.UrlBaseHttpActivo!) };
+                string html = await client.GetStringAsync("/index.html");
+                string js = await client.GetStringAsync("/app.js");
+
+                // Indicador de desconexión LAN y recuperación
+                Assert.Contains("id=\"connection-status\"", html);
+                Assert.Contains("isNetworkDisconnected", js);
+                Assert.Contains("Sin conexión LAN", js);
+
+                // Aviso no intrusivo ante retiro por concurrencia o cambio de carrera
+                string cuerpoSync = ExtraerBloqueFuncion(js, "syncPendingQueueWithServer");
+                Assert.Contains("removedConcurrently", cuerpoSync);
+                Assert.Contains("showStatusBanner", cuerpoSync);
+
+                // Disparo instantáneo sin deshabilitar #btn-capture
+                string cuerpoCapture = ExtraerBloqueFuncion(js, "capturePhotoFrame");
+                Assert.Contains("triggerCaptureVisualFeedback", cuerpoCapture);
+                Assert.Contains("addPendingItemToUI", cuerpoCapture);
+                Assert.DoesNotContain("btnCapture.disabled = true", js);
+                Assert.DoesNotContain("btnCapture.disabled=true", js);
+            }
+            finally
+            {
+                WebServer.LimpiarColaPendientes();
+                AppState.CambiarCarreraActiva(null);
+            }
+        }
+
+        [Fact]
+        public async Task LeaderboardWindow_InstanciaEnStaSinApplicationCurrentConFondoOscuroYEstadoVacio()
+        {
+            using var env = new TestEnvironmentFixture();
+            await DatabaseMaintenanceHelper.InicializarYMigrarBaseDatosAsync(env.CrearFabricaContexto());
+
+            string? colorFondoHex = null;
+            Visibility visibilidadVacioSinCarrera = Visibility.Collapsed;
+            string? tituloVacio = null;
+
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    AppState.CambiarCarreraActiva(null);
+                    var pizarra = new LeaderboardWindow(env.CrearFabricaContexto())
+                    {
+                        WindowState = WindowState.Normal,
+                        Width = 800,
+                        Height = 600,
+                        Left = -32000,
+                        Top = -32000,
+                        ShowActivated = false,
+                        ShowInTaskbar = false,
+                        Opacity = 0
+                    };
+                    pizarra.Show();
+
+                    var panelVacio = (Border)pizarra.FindName("PanelEstadoVacio");
+                    var txtVacio = (TextBlock)pizarra.FindName("TxtEstadoVacioTitulo");
+
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    while (panelVacio.Visibility != Visibility.Visible && sw.Elapsed < TimeSpan.FromSeconds(3))
+                    {
+                        System.Windows.Threading.Dispatcher.CurrentDispatcher.Invoke(
+                            () => { },
+                            System.Windows.Threading.DispatcherPriority.Background);
+                        Thread.Sleep(20);
+                    }
+
+                    if (pizarra.Background is SolidColorBrush scb)
+                    {
+                        colorFondoHex = $"#{scb.Color.R:X2}{scb.Color.G:X2}{scb.Color.B:X2}";
+                    }
+                    visibilidadVacioSinCarrera = panelVacio.Visibility;
+                    tituloVacio = txtVacio.Text;
+
+                    pizarra.Close();
+                    tcs.SetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            await tcs.Task;
+
+            Assert.Equal("#0B0E14", colorFondoHex);
+            Assert.Equal(Visibility.Visible, visibilidadVacioSinCarrera);
+            Assert.Equal("Sin carrera activa", tituloVacio);
         }
 
         private static string ExtraerBloqueFuncion(string codigoJs, string nombreFuncion)

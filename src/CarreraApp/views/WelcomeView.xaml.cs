@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
@@ -8,8 +10,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using CarreraApp.Data;
+using CarreraApp.Helpers;
 using CarreraApp.Models;
 using CarreraApp.Server;
 using QRCoder;
@@ -20,6 +25,8 @@ namespace CarreraApp.UI.Views
     {
         private readonly RaceDataService _raceDataService = new();
         private CancellationTokenSource? _viewCts;
+        private DispatcherTimer? _feedbackTimer;
+        private bool _estaDescargado;
 
         public WelcomeView()
         {
@@ -31,17 +38,31 @@ namespace CarreraApp.UI.Views
 
         private void WelcomeView_Loaded(object sender, RoutedEventArgs e)
         {
+            _estaDescargado = false;
             CancelarOperacionesPendientes();
             _viewCts = new CancellationTokenSource();
             CancellationToken ct = _viewCts.Token;
 
+            ActualizarEstadoSeleccion();
             _ = CargarCarrerasAsync(ct);
             _ = GenerarCodigoQRAsync(ct);
         }
 
         private void WelcomeView_Unloaded(object sender, RoutedEventArgs e)
         {
+            _estaDescargado = true;
+            DetenerFeedbackTimer();
             CancelarOperacionesPendientes();
+        }
+
+        private void DetenerFeedbackTimer()
+        {
+            if (_feedbackTimer != null)
+            {
+                _feedbackTimer.Stop();
+                _feedbackTimer.Tick -= FeedbackTimer_Tick;
+                _feedbackTimer = null;
+            }
         }
 
         private void CancelarOperacionesPendientes()
@@ -162,11 +183,28 @@ namespace CarreraApp.UI.Views
                     return;
                 }
 
-                var carreras = await _raceDataService.ObtenerCarrerasAsync();
-                if (!cancellationToken.IsCancellationRequested)
+                List<Carrera> carreras = await _raceDataService.ObtenerCarrerasAsync();
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    ListaCarreras.ItemsSource = carreras;
+                    return;
                 }
+
+                ListaCarreras.ItemsSource = carreras;
+
+                bool hayCarreras = carreras.Count > 0;
+                ListaCarreras.Visibility = hayCarreras ? Visibility.Visible : Visibility.Collapsed;
+                PanelEstadoVacioCarreras.Visibility = hayCarreras ? Visibility.Collapsed : Visibility.Visible;
+
+                if (hayCarreras && AppState.CarreraActiva != null)
+                {
+                    Carrera? carreraActivaEnLista = carreras.FirstOrDefault(c => c.ID_Carrera == AppState.CarreraActiva.ID_Carrera);
+                    if (carreraActivaEnLista != null)
+                    {
+                        ListaCarreras.SelectedItem = carreraActivaEnLista;
+                    }
+                }
+
+                ActualizarEstadoSeleccion();
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -176,13 +214,108 @@ namespace CarreraApp.UI.Views
             {
                 if (!cancellationToken.IsCancellationRequested)
                 {
-                    MessageBox.Show($"Error al cargar las carreras: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MostrarFeedback(NivelFeedback.Error, $"No se pudieron cargar las carreras: {ex.Message}");
                 }
             }
         }
 
+        private void ActualizarEstadoSeleccion()
+        {
+            if (ListaCarreras.SelectedItem is Carrera seleccionada)
+            {
+                BtnAbrirCarrera.IsEnabled = true;
+                BtnAbrirCarrera.Content = "Abrir carrera seleccionada";
+                TxtResumenSeleccion.Text = $"Seleccionada: {seleccionada.Nombre}";
+            }
+            else
+            {
+                BtnAbrirCarrera.IsEnabled = false;
+                BtnAbrirCarrera.Content = "Abrir carrera seleccionada";
+                TxtResumenSeleccion.Text = ListaCarreras.Items.Count > 0
+                    ? "Selecciona una carrera de la lista"
+                    : "Sin carreras registradas";
+            }
+
+            TxtEstadoCarreraActiva.Text = AppState.CarreraActiva != null
+                ? $"Activa ahora: {AppState.CarreraActiva.Nombre}"
+                : "Ninguna carrera activa";
+        }
+
+        private void ListaCarreras_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            ActualizarEstadoSeleccion();
+        }
+
+        private void ListaCarreras_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (ListaCarreras.SelectedItem is Carrera carreraSeleccionada)
+            {
+                AbrirPanelGestion(carreraSeleccionada);
+            }
+        }
+
+        private void ListaCarreras_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && ListaCarreras.SelectedItem is Carrera carreraSeleccionada)
+            {
+                e.Handled = true;
+                AbrirPanelGestion(carreraSeleccionada);
+            }
+        }
+
+        private void BtnAbrirCarrera_Click(object sender, RoutedEventArgs e)
+        {
+            if (ListaCarreras.SelectedItem is Carrera carreraSeleccionada)
+            {
+                AbrirPanelGestion(carreraSeleccionada);
+            }
+        }
+
+        private void BtnIrACrearCarrera_Click(object sender, RoutedEventArgs e)
+        {
+            LimpiarErroresFormulario();
+            InputNombreCarrera.Focus();
+            Keyboard.Focus(InputNombreCarrera);
+        }
+
+        private void InputNombreCarrera_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            LimpiarErrorNombre();
+        }
+
+        private void InputNombreCarrera_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                BtnCrearCarrera_Click(BtnCrearCarrera, new RoutedEventArgs());
+            }
+        }
+
+        private void InputFechaCarrera_SelectedDateChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            LimpiarErrorFecha();
+        }
+
         private async void BtnCrearCarrera_Click(object sender, RoutedEventArgs e)
         {
+            LimpiarErroresFormulario();
+
+            string nombreIngresado = InputNombreCarrera.Text?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(nombreIngresado))
+            {
+                MostrarErrorNombre("Escribe un nombre para la carrera antes de continuar.");
+                InputNombreCarrera.Focus();
+                return;
+            }
+
+            if (InputFechaCarrera.SelectedDate == null)
+            {
+                MostrarErrorFecha("Selecciona una fecha válida para el evento.");
+                InputFechaCarrera.Focus();
+                return;
+            }
+
             BtnCrearCarrera.IsEnabled = false;
             try
             {
@@ -190,20 +323,31 @@ namespace CarreraApp.UI.Views
 
                 OperacionResultado<Carrera> resultado = await _raceDataService.CrearOActualizarCarreraAsync(
                     null,
-                    InputNombreCarrera.Text,
+                    nombreIngresado,
                     InputFechaCarrera.SelectedDate);
 
                 if (!resultado.Exito || resultado.Entidad == null)
                 {
-                    MessageBox.Show(resultado.Mensaje, "Validación de Carrera", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    if (resultado.Mensaje.Contains("fecha", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MostrarErrorFecha(resultado.Mensaje);
+                        InputFechaCarrera.Focus();
+                    }
+                    else
+                    {
+                        MostrarErrorNombre(resultado.Mensaje);
+                        InputNombreCarrera.Focus();
+                    }
                     return;
                 }
 
-                AbrirPanelGestion(resultado.Entidad);
+                AbrirPanelGestion(
+                    resultado.Entidad,
+                    $"Carrera \"{resultado.Entidad.Nombre}\" creada y activada.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error al crear la carrera: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MostrarFeedback(NivelFeedback.Error, $"No se pudo crear la carrera: {ex.Message}");
             }
             finally
             {
@@ -211,25 +355,171 @@ namespace CarreraApp.UI.Views
             }
         }
 
-        private void CarreraExistente_Click(object sender, MouseButtonEventArgs e)
+        private void BtnCopiarUrl_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Border border && border.DataContext is Carrera carreraSeleccionada)
+            CopiarAlPortapapeles(
+                TxtUrlServer.Text,
+                "Enlace del servidor copiado al portapapeles.",
+                "El enlace del servidor aún no está listo.");
+        }
+
+        private void BtnCopiarToken_Click(object sender, RoutedEventArgs e)
+        {
+            CopiarAlPortapapeles(
+                TxtTokenSesion.Text,
+                "Token de sesión copiado al portapapeles.",
+                "El token de sesión aún no está disponible.");
+        }
+
+        private void CopiarAlPortapapeles(string? texto, string mensajeExito, string mensajeVacio)
+        {
+            if (string.IsNullOrWhiteSpace(texto))
             {
-                AbrirPanelGestion(carreraSeleccionada);
+                MostrarFeedback(NivelFeedback.Advertencia, mensajeVacio);
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetText(texto);
+                MostrarFeedback(NivelFeedback.Exito, mensajeExito);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[WelcomeView] No se pudo copiar al portapapeles: {ex.Message}");
+                MostrarFeedback(NivelFeedback.Advertencia, "No se pudo acceder al portapapeles. Copia el texto manualmente.");
             }
         }
 
-        private void AbrirPanelGestion(Carrera carrera)
+        private void MostrarErrorNombre(string mensaje)
+        {
+            InputNombreCarrera.BorderBrush = CrearBrushCongelado(UiFeedbackHelper.TokensPaleta.PenaltyCrimson);
+            InputNombreCarrera.BorderThickness = new Thickness(2);
+            TxtErrorNombreCarrera.Text = mensaje;
+            TxtErrorNombreCarrera.Visibility = Visibility.Visible;
+        }
+
+        private void LimpiarErrorNombre()
+        {
+            InputNombreCarrera.ClearValue(BorderBrushProperty);
+            InputNombreCarrera.ClearValue(BorderThicknessProperty);
+            TxtErrorNombreCarrera.Text = string.Empty;
+            TxtErrorNombreCarrera.Visibility = Visibility.Collapsed;
+        }
+
+        private void MostrarErrorFecha(string mensaje)
+        {
+            InputFechaCarrera.BorderBrush = CrearBrushCongelado(UiFeedbackHelper.TokensPaleta.PenaltyCrimson);
+            InputFechaCarrera.BorderThickness = new Thickness(2);
+            TxtErrorFechaCarrera.Text = mensaje;
+            TxtErrorFechaCarrera.Visibility = Visibility.Visible;
+        }
+
+        private void LimpiarErrorFecha()
+        {
+            InputFechaCarrera.ClearValue(BorderBrushProperty);
+            InputFechaCarrera.ClearValue(BorderThicknessProperty);
+            TxtErrorFechaCarrera.Text = string.Empty;
+            TxtErrorFechaCarrera.Visibility = Visibility.Collapsed;
+        }
+
+        private void LimpiarErroresFormulario()
+        {
+            LimpiarErrorNombre();
+            LimpiarErrorFecha();
+        }
+
+        private void AbrirPanelGestion(Carrera carrera, string? mensajeConfirmacion = null)
         {
             // RF-13: cambiar carrera activa limpiando pizarra, cola UI y cola del servidor web
             AppState.CambiarCarreraActiva(carrera);
 
-            var mainWindow = (Window.GetWindow(this) as MainWindow) ?? (Application.Current?.MainWindow as MainWindow);
+            var mainWindow = ObtenerMainWindow();
             if (mainWindow != null)
             {
                 mainWindow.ActualizarTituloCarrera();
                 mainWindow.NavegarAVista(new TimingView());
+                mainWindow.MostrarNotificacionGlobal(
+                    NivelFeedback.Exito,
+                    mensajeConfirmacion ?? $"Carrera \"{carrera.Nombre}\" abierta.");
             }
+            else if (!string.IsNullOrWhiteSpace(mensajeConfirmacion))
+            {
+                MostrarBannerEnLinea(NivelFeedback.Exito, mensajeConfirmacion);
+            }
+        }
+
+        private void MostrarFeedback(NivelFeedback nivel, string mensaje)
+        {
+            var mainWindow = ObtenerMainWindow();
+            if (mainWindow != null)
+            {
+                mainWindow.MostrarNotificacionGlobal(nivel, mensaje);
+                return;
+            }
+
+            MostrarBannerEnLinea(nivel, mensaje);
+        }
+
+        private void MostrarBannerEnLinea(NivelFeedback nivel, string mensaje)
+        {
+            if (_estaDescargado || Dispatcher.HasShutdownStarted)
+            {
+                return;
+            }
+
+            ConfiguracionAvisoFeedback config = UiFeedbackHelper.CrearConfiguracionAviso(nivel, mensaje);
+            DetenerFeedbackTimer();
+
+            Brush fondo = CrearBrushCongelado(config.ColorFondoHex);
+            Brush borde = CrearBrushCongelado(config.ColorBordeHex);
+            Brush texto = CrearBrushCongelado(config.ColorTextoHex);
+
+            BannerFeedbackWelcome.Background = fondo;
+            BannerFeedbackWelcome.BorderBrush = borde;
+            TxtBannerFeedbackWelcome.Foreground = texto;
+            BtnCerrarBannerWelcome.Foreground = texto;
+            TxtBannerFeedbackWelcome.Text = config.Mensaje;
+            BannerFeedbackWelcome.Visibility = Visibility.Visible;
+
+            if (!config.RequiereCierreManual && config.DuracionAutoOcultamientoMs > 0)
+            {
+                _feedbackTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher)
+                {
+                    Interval = TimeSpan.FromMilliseconds(config.DuracionAutoOcultamientoMs)
+                };
+                _feedbackTimer.Tick += FeedbackTimer_Tick;
+                _feedbackTimer.Start();
+            }
+        }
+
+        private void FeedbackTimer_Tick(object? sender, EventArgs e)
+        {
+            OcultarBannerEnLinea();
+        }
+
+        private void BtnCerrarBannerWelcome_Click(object sender, RoutedEventArgs e)
+        {
+            OcultarBannerEnLinea();
+        }
+
+        private void OcultarBannerEnLinea()
+        {
+            DetenerFeedbackTimer();
+            BannerFeedbackWelcome.Visibility = Visibility.Collapsed;
+            TxtBannerFeedbackWelcome.Text = string.Empty;
+        }
+
+        private MainWindow? ObtenerMainWindow()
+        {
+            return (Window.GetWindow(this) as MainWindow) ?? (Application.Current?.MainWindow as MainWindow);
+        }
+
+        private static SolidColorBrush CrearBrushCongelado(string hex)
+        {
+            var brush = (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
+            brush.Freeze();
+            return brush;
         }
     }
 }
