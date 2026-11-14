@@ -1,6 +1,6 @@
 # Race Management & Live Timekeeping Desktop App 🏁
 
-<img width="1366" height="704" alt="image" src="https://github.com/user-attachments/assets/b420ad03-6045-4c5e-86dc-184fd89b2853" />
+<img width="1366" height="703" alt="image" src="https://github.com/user-attachments/assets/823f1d82-32ac-42aa-95a5-51fadeaaf53c" />
 
 ## 📖 Overview
 Managing live sports events requires speed, precision, and reliable offline capabilities. This desktop application is a complete, standalone solution built to manage obstacle race timekeeping, heat generation, and real-time public leaderboards. 
@@ -24,7 +24,7 @@ One of the core challenges was allowing mobile devices to interact with the desk
 
 ## 🚀 Try It Out
 You don't need to compile the code to see it in action.
-1. Go to the [Releases](https://github.com/abner2205/SistemaCarrera/releases/tag/v1.0.0) page.
+1. Go to the [Releases](https://github.com/abner2205/SistemaCarrera/releases) page.
 2. Download the latest `.rar` file.
 3. Run the application on any Windows 10/11 machine.
 
